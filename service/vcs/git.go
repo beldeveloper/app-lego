@@ -39,6 +39,7 @@ func (g Git) DownloadRepository(ctx context.Context, r model.Repository) error {
 		Name: "git",
 		Args: []string{"clone", r.Name, r.Alias},
 		Dir:  g.workDir,
+		Log:  true,
 	}
 	_, err := g.os.RunCmd(ctx, cmd)
 	if err != nil {
@@ -87,6 +88,7 @@ func (g Git) SwitchBranch(ctx context.Context, r model.Repository, b model.Branc
 		Name: "git",
 		Args: []string{"checkout", b.Name},
 		Dir:  g.workDir + "/" + r.Alias,
+		Log:  true,
 	})
 	if err != nil {
 		return fmt.Errorf("service.vcs.git.SwitchBranch: checkout: %w; branch ID = %d", err, b.ID)
@@ -95,6 +97,7 @@ func (g Git) SwitchBranch(ctx context.Context, r model.Repository, b model.Branc
 		Name: "git",
 		Args: []string{"pull"},
 		Dir:  g.workDir + "/" + r.Alias,
+		Log:  true,
 	})
 	if err != nil {
 		return fmt.Errorf("service.vcs.git.SwitchBranch: pull: %w; branch ID = %d", err, b.ID)

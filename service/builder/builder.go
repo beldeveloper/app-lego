@@ -152,6 +152,7 @@ func (b Builder) prepareSteps(ctx context.Context, branch model.Branch) *buildin
 		currStep := &readConfigurationStep
 		for _, cmd := range cfg.Commands() {
 			cmd := cmd
+			cmd.Log = true
 			if strings.HasPrefix(cmd.Dir, ".") {
 				cmd.Dir = b.workDir + "/" + r.Alias + "/" + cmd.Dir
 			}

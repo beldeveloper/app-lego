@@ -20,7 +20,9 @@ type OS struct {
 func (os OS) RunCmd(ctx context.Context, cmd model.Cmd) (string, error) {
 	osCmd := exec.CommandContext(ctx, cmd.Name, cmd.Args...)
 	osCmd.Dir = cmd.Dir
-	log.Printf("Exec OS command: %s %v; dir %s\n", cmd.Name, cmd.Args, cmd.Dir)
+	if cmd.Log {
+		log.Printf("Exec OS command: %s %v; dir %s\n", cmd.Name, cmd.Args, cmd.Dir)
+	}
 	res, err := osCmd.Output()
 	return string(res), err
 }
