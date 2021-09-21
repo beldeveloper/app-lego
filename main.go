@@ -8,6 +8,8 @@ import (
 	"github.com/beldeveloper/app-lego/service"
 	"github.com/beldeveloper/app-lego/service/branch"
 	"github.com/beldeveloper/app-lego/service/builder"
+	"github.com/beldeveloper/app-lego/service/deployer"
+	"github.com/beldeveloper/app-lego/service/deployment"
 	appOs "github.com/beldeveloper/app-lego/service/os"
 	"github.com/beldeveloper/app-lego/service/repository"
 	"github.com/beldeveloper/app-lego/service/validation"
@@ -29,19 +31,23 @@ func main() {
 	if err != nil {
 		log.Fatalf("main: establish postgress connection: %v\n", err)
 	}
-	repositoriesDir := os.Getenv("APP_LEGO_WORKING_DIR") + "/repositories"
+	workDir := os.Getenv("APP_LEGO_WORKING_DIR")
+	repositoriesDir := workDir + "/repositories"
 	var s service.Container
 	s.Repository = repository.NewPostgres(pgConn, pgSchema)
 	s.Branches = branch.NewPostgres(pgConn, pgSchema)
+	s.Deployment = deployment.NewPostgres(pgConn, pgSchema)
 	s.OS = appOs.NewOS()
 	s.Variable = variable.NewVariable()
 	s.Validation = validation.NewValidation()
 	s.VCS = vcs.NewGit(repositoriesDir, s.OS, s.Variable)
 	s.Builder = builder.NewBuilder(repositoriesDir, s.VCS, s.OS, s.Repository, s.Branches)
+	s.Deployer = deployer.NewDeployer(s.Repository, s.Branches, s.Deployment, s.OS, s.Variable, workDir)
 	c := controller.NewController(s)
 	go c.DownloadRepositoryJob(ctx)
 	go c.SyncRepositoryJob(ctx)
 	go c.BuildBranchJob(ctx)
+	go c.WatchDeploymentsJob(ctx)
 	runHttpServer(c)
 }
 

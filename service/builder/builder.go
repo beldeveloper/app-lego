@@ -9,6 +9,7 @@ import (
 	"github.com/beldeveloper/app-lego/service/os"
 	"github.com/beldeveloper/app-lego/service/repository"
 	"github.com/beldeveloper/app-lego/service/vcs"
+	"gopkg.in/yaml.v2"
 	"log"
 	"strings"
 	"sync"
@@ -140,7 +141,11 @@ func (b Builder) prepareSteps(ctx context.Context, branch model.Branch) *buildin
 	finishStep := buildingStep{
 		name: "finish",
 		action: func() error {
-			return b.branches.SaveDockerCompose(ctx, branch, cfg.Compose)
+			data, err := yaml.Marshal(cfg.Compose)
+			if err != nil {
+				return err
+			}
+			return b.branches.SaveComposeData(ctx, branch, data)
 		},
 	}
 

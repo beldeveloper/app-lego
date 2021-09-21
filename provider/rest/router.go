@@ -11,7 +11,13 @@ func CreateRouter(c controller.Service) *httprouter.Router {
 	h := NewHandler(c)
 	r := httprouter.New()
 
+	r.GET("/repositories", h.Repositories)
 	r.POST("/repositories", h.AddRepository)
+	r.GET("/branches", h.Branches)
+	r.GET("/deployments", h.Deployments)
+	r.POST("/deployments", h.AddDeployment)
+	r.POST("/deployment/:id", h.RebuildDeployment)
+	r.DELETE("/deployment/:id", h.CloseDeployment)
 
 	r.GlobalOPTIONS = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		SetDefaultHeaders(w)

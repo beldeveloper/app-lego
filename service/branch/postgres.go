@@ -6,7 +6,6 @@ import (
 	"github.com/beldeveloper/app-lego/model"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
-	"gopkg.in/yaml.v2"
 	"strconv"
 	"strings"
 )
@@ -69,6 +68,60 @@ func (p Postgres) Sync(ctx context.Context, r model.Repository, branches []model
 	return res, nil
 }
 
+// FindAll returns all branches.
+func (p Postgres) FindAll(ctx context.Context) ([]model.Branch, error) {
+	q := fmt.Sprintf(
+		`SELECT "id", "repository_id", "type", "name", "hash", "status" FROM "%s"."branches" ORDER BY "name"`,
+		p.schema,
+	)
+	rows, err := p.conn.Query(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("service.branch.postgres.FindAll: query: %w", err)
+	}
+	defer rows.Close()
+	res := make([]model.Branch, 0)
+	var b model.Branch
+	for rows.Next() {
+		err = rows.Scan(&b.ID, &b.RepositoryID, &b.Type, &b.Name, &b.Hash, &b.Status)
+		if err != nil {
+			return nil, fmt.Errorf("service.branch.postgres.FindAll: scan: %w", err)
+		}
+		res = append(res, b)
+	}
+	return res, nil
+}
+
+// FindByIDs returns all branches with the specific IDs.
+func (p Postgres) FindByIDs(ctx context.Context, ids []uint64) ([]model.Branch, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	idsStr := make([]string, len(ids))
+	for i, id := range ids {
+		idsStr[i] = strconv.Itoa(int(id))
+	}
+	q := fmt.Sprintf(
+		`SELECT "id", "repository_id", "type", "name", "hash", "status" FROM "%s"."branches" WHERE "id" IN (%s)`,
+		p.schema,
+		strings.Join(idsStr, ","),
+	)
+	rows, err := p.conn.Query(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("service.branch.postgres.FindByIDs: query: %w", err)
+	}
+	defer rows.Close()
+	res := make([]model.Branch, 0)
+	var b model.Branch
+	for rows.Next() {
+		err = rows.Scan(&b.ID, &b.RepositoryID, &b.Type, &b.Name, &b.Hash, &b.Status)
+		if err != nil {
+			return nil, fmt.Errorf("service.branch.postgres.FindByIDs: scan: %w", err)
+		}
+		res = append(res, b)
+	}
+	return res, nil
+}
+
 // FindByRepository returns all branches that belong to the specific repository.
 func (p Postgres) FindByRepository(ctx context.Context, r model.Repository) ([]model.Branch, error) {
 	q := fmt.Sprintf(
@@ -90,6 +143,23 @@ func (p Postgres) FindByRepository(ctx context.Context, r model.Repository) ([]m
 		res = append(res, b)
 	}
 	return res, nil
+}
+
+// FindByID returns the one branch with the specific ID.
+func (p Postgres) FindByID(ctx context.Context, id uint64) (model.Branch, error) {
+	var b model.Branch
+	q := fmt.Sprintf(
+		`SELECT "id", "repository_id", "type", "name", "hash", "status" FROM "%s"."branches" WHERE "id" = $1`,
+		p.schema,
+	)
+	err := p.conn.QueryRow(ctx, q, id).Scan(&b.ID, &b.RepositoryID, &b.Type, &b.Name, &b.Hash, &b.Status)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return b, model.ErrNotFound
+		}
+		return b, fmt.Errorf("service.branch.postgres.FindByID: query: %w", err)
+	}
+	return b, nil
 }
 
 // FindEnqueued returns the one branch that is enqueued.
@@ -161,35 +231,26 @@ func (p Postgres) UpdateStatus(ctx context.Context, b model.Branch) error {
 	return nil
 }
 
-// LoadDockerCompose reads the composing configuration for the specific branch.
-func (p Postgres) LoadDockerCompose(ctx context.Context, b model.Branch) (model.DockerCompose, error) {
-	var res model.DockerCompose
+// LoadComposeData reads the composing configuration for the specific branch.
+func (p Postgres) LoadComposeData(ctx context.Context, b model.Branch) ([]byte, error) {
 	var data []byte
 	q := fmt.Sprintf(`SELECT "compose" FROM "%s"."branches" WHERE "id" = $1`, p.schema)
 	err := p.conn.QueryRow(ctx, q, b.ID).Scan(&data)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return res, model.ErrNotFound
+			return data, model.ErrNotFound
 		}
-		return res, fmt.Errorf("service.branch.postgres.LoadDockerCompose: query: %w", err)
+		return data, fmt.Errorf("service.branch.postgres.LoadDockerCompose: query: %w", err)
 	}
-	err = yaml.Unmarshal(data, &res)
-	if err != nil {
-		return res, fmt.Errorf("service.branch.postgres.LoadDockerCompose: unmarshal: %w", err)
-	}
-	return res, nil
+	return data, nil
 }
 
-// SaveDockerCompose saves the composing configuration for the specific branch.
-func (p Postgres) SaveDockerCompose(ctx context.Context, b model.Branch, dc model.DockerCompose) error {
-	data, err := yaml.Marshal(dc)
-	if err != nil {
-		return fmt.Errorf("service.branch.postgres.SaveDockerCompose: marshal: %w", err)
-	}
+// SaveComposeData saves the composing configuration for the specific branch.
+func (p Postgres) SaveComposeData(ctx context.Context, b model.Branch, data []byte) error {
 	q := fmt.Sprintf(`UPDATE "%s"."branches" SET "compose" = $2 WHERE "id" = $1`, p.schema)
-	_, err = p.conn.Exec(ctx, q, b.ID, data)
+	_, err := p.conn.Exec(ctx, q, b.ID, data)
 	if err != nil {
-		return fmt.Errorf("service.branch.postgres.SaveDockerCompose: exec: %w", err)
+		return fmt.Errorf("service.branch.postgres.SaveComposeData: exec: %w", err)
 	}
 	return nil
 }

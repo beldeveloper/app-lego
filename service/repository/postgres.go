@@ -19,6 +19,29 @@ type Postgres struct {
 	schema string
 }
 
+// FindAll returns all repositories.
+func (p Postgres) FindAll(ctx context.Context) ([]model.Repository, error) {
+	q := fmt.Sprintf(
+		`SELECT "id", "type", "alias", "name", "status", "updated_at" FROM "%s"."repositories" ORDER BY "alias"`,
+		p.schema,
+	)
+	rows, err := p.conn.Query(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("service.repository.postgres.FindAll: query: %w", err)
+	}
+	defer rows.Close()
+	res := make([]model.Repository, 0)
+	var r model.Repository
+	for rows.Next() {
+		err = rows.Scan(&r.ID, &r.Type, &r.Alias, &r.Name, &r.Status, &r.UpdatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("service.repository.postgres.FindAll: scan: %w", err)
+		}
+		res = append(res, r)
+	}
+	return res, nil
+}
+
 // FindByID returns a repository by its ID.
 func (p Postgres) FindByID(ctx context.Context, id uint64) (model.Repository, error) {
 	var r model.Repository

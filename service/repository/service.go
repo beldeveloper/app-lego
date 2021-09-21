@@ -8,6 +8,7 @@ import (
 
 // Service defines the repository service interface.
 type Service interface {
+	FindAll(ctx context.Context) ([]model.Repository, error)
 	FindByID(ctx context.Context, id uint64) (model.Repository, error)
 	FindPending(ctx context.Context) (model.Repository, error)
 	FindOutdated(ctx context.Context) (model.Repository, error)

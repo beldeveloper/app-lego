@@ -18,6 +18,8 @@ const (
 	SyncRepositoryFrequency = time.Second * 10
 	// BuildBranchFrequency defines the frequency of the branch build job.
 	BuildBranchFrequency = time.Second * 2
+	// WatchDeploymentsFrequency defines the frequency of the watch deployments job.
+	WatchDeploymentsFrequency = time.Second * 2
 )
 
 // NewController creates a new instance of the application controller.
@@ -51,6 +53,76 @@ func (c Controller) AddRepository(ctx context.Context, f model.FormAddRepository
 	}
 	log.Printf("The repository #%d is added\n", r.ID)
 	return r, nil
+}
+
+// Repositories returns the list of repositories.
+func (c Controller) Repositories(ctx context.Context) ([]model.Repository, error) {
+	return c.services.Repository.FindAll(ctx)
+}
+
+// Branches returns the list of branches.
+func (c Controller) Branches(ctx context.Context) ([]model.Branch, error) {
+	return c.services.Branches.FindAll(ctx)
+}
+
+// Deployments returns the list of deployments.
+func (c Controller) Deployments(ctx context.Context) ([]model.Deployment, error) {
+	return c.services.Deployment.FindAll(ctx)
+}
+
+// AddDeployment adds and enqueues new deployment.
+func (c Controller) AddDeployment(ctx context.Context, f model.FormAddDeployment) (model.Deployment, error) {
+	branches, err := c.services.Branches.FindByIDs(ctx, f.Branches)
+	if err != nil {
+		return model.Deployment{}, fmt.Errorf("controller.AddDeployment: find branches: %w", err)
+	}
+	d := model.Deployment{
+		Status:    model.DeploymentStatusEnqueued,
+		CreatedAt: time.Now(),
+		Branches:  make([]model.DeploymentBranch, len(branches)),
+	}
+	for i, b := range branches {
+		d.Branches[i] = model.DeploymentBranch{
+			ID:   b.ID,
+			Hash: b.Hash,
+		}
+	}
+	d, err = c.services.Deployment.Add(ctx, d)
+	if err != nil {
+		return d, fmt.Errorf("controller.AddDeployment: add: %w", err)
+	}
+	log.Printf("The deployment #%d is requested\n", d.ID)
+	return d, nil
+}
+
+// RebuildDeployment enqueues the existing deployment for rebuilding.
+func (c Controller) RebuildDeployment(ctx context.Context, id uint64) (model.Deployment, error) {
+	d, err := c.services.Deployment.FindByID(ctx, id)
+	if err != nil {
+		return d, fmt.Errorf("controller.RebuildDeployment: find by id: %w", err)
+	}
+	d.Status = model.DeploymentStatusPendingRebuild
+	d, err = c.services.Deployment.Update(ctx, d)
+	if err != nil {
+		return d, fmt.Errorf("controller.RebuildDeployment: update: %w", err)
+	}
+	log.Printf("The deployment #%d is enqueued for rebuilding\n", d.ID)
+	return d, nil
+}
+
+// CloseDeployment enqueues the existing deployment for closing.
+func (c Controller) CloseDeployment(ctx context.Context, id uint64) error {
+	d, err := c.services.Deployment.FindByID(ctx, id)
+	if err != nil {
+		return fmt.Errorf("controller.DeleteDeployment: find by id: %w", err)
+	}
+	d.Status = model.DeploymentStatusPendingClose
+	d, err = c.services.Deployment.Update(ctx, d)
+	if err != nil {
+		return fmt.Errorf("controller.DeleteDeployment: update: %w", err)
+	}
+	log.Printf("The deployment #%d is enqueued for closing\n", d.ID)
+	return nil
 }
 
 // DownloadRepositoryJob is a job that downloads new repositories.
@@ -170,6 +242,23 @@ func (c Controller) BuildBranchJob(ctx context.Context) {
 				break
 			}
 			log.Printf("The branch #%d is built\n", b.ID)
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// WatchDeploymentsJob is a job that watches for the deployments state, builds, rebuilds, closes them.
+func (c Controller) WatchDeploymentsJob(ctx context.Context) {
+	t := time.NewTicker(WatchDeploymentsFrequency)
+	defer t.Stop()
+	for {
+		select {
+		case <-t.C:
+			err := c.services.Deployer.Run(ctx)
+			if err != nil {
+				log.Printf("controller.WatchDeploymentsJob: run deployer: %v\n", err)
+			}
 		case <-ctx.Done():
 			return
 		}

@@ -18,12 +18,12 @@ const (
 
 // Repository is a model that represents a VCS repository.
 type Repository struct {
-	ID        uint64
-	Type      string
-	Alias     string
-	Name      string
-	Status    string
-	UpdatedAt time.Time
+	ID        uint64    `json:"id"`
+	Type      string    `json:"type"`
+	Alias     string    `json:"alias"`
+	Name      string    `json:"name"`
+	Status    string    `json:"status"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // FormAddRepository is a new repository form.

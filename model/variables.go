@@ -4,4 +4,5 @@ package model
 type Variables struct {
 	Repository Repository
 	Branch     Branch
+	Deployment Deployment
 }

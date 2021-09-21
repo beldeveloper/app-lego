@@ -1,10 +1,14 @@
 package os
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"github.com/beldeveloper/app-lego/model"
 	"log"
+	"os"
 	"os/exec"
+	"strings"
 )
 
 // NewOS creates a new instance of the OS module.
@@ -17,12 +21,27 @@ type OS struct {
 }
 
 // RunCmd executes the system command and returns the system output.
-func (os OS) RunCmd(ctx context.Context, cmd model.Cmd) (string, error) {
+func (s OS) RunCmd(ctx context.Context, cmd model.Cmd) (string, error) {
 	osCmd := exec.CommandContext(ctx, cmd.Name, cmd.Args...)
 	osCmd.Dir = cmd.Dir
+	osCmd.Env = os.Environ()
+	osCmd.Env = append(osCmd.Env, cmd.Env...)
 	if cmd.Log {
-		log.Printf("Exec OS command: %s %v; dir %s\n", cmd.Name, cmd.Args, cmd.Dir)
+		log.Printf(
+			"Exec OS command: [%s] %s %s %s\n",
+			cmd.Dir,
+			strings.Join(cmd.Env, " "),
+			cmd.Name,
+			strings.Join(cmd.Args, " "),
+		)
 	}
-	res, err := osCmd.Output()
-	return string(res), err
+	var out bytes.Buffer
+	var stderr bytes.Buffer
+	osCmd.Stdout = &out
+	osCmd.Stderr = &stderr
+	err := osCmd.Run()
+	if err != nil {
+		return "", fmt.Errorf("%w; output: %s", err, strings.TrimSpace(stderr.String()))
+	}
+	return out.String(), nil
 }

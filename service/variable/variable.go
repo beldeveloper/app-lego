@@ -30,6 +30,9 @@ func (s Variable) Replace(ctx context.Context, data []byte, v model.Variables) (
 		data = bytes.ReplaceAll(data, s.castString("{BRANCH_NAME}"), s.castString(v.Branch.Name))
 		data = bytes.ReplaceAll(data, s.castString("{BRANCH_HASH}"), s.castString(v.Branch.Hash))
 	}
+	if v.Deployment.ID > 0 {
+		data = bytes.ReplaceAll(data, s.castString("{DEPLOYMENT_ID}"), s.castUint64(v.Deployment.ID))
+	}
 	return data, nil
 }
 

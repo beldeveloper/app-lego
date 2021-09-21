@@ -30,3 +30,4 @@ The application requires Docker and Postgres.
 - BRANCH_TYPE
 - BRANCH_NAME
 - BRANCH_HASH
+- DEPLOYMENT_ID

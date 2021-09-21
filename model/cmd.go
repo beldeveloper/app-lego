@@ -4,6 +4,7 @@ package model
 type Cmd struct {
 	Name string   `yaml:"name"`
 	Args []string `yaml:"args"`
+	Env  []string `yaml:"env"`
 	Dir  string   `yaml:"dir"`
 	Log  bool     `yaml:"-"`
 }
