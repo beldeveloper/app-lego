@@ -77,9 +77,10 @@ func (c Controller) AddDeployment(ctx context.Context, f model.FormAddDeployment
 		return model.Deployment{}, fmt.Errorf("controller.AddDeployment: find branches: %w", err)
 	}
 	d := model.Deployment{
-		Status:    model.DeploymentStatusEnqueued,
-		CreatedAt: time.Now(),
-		Branches:  make([]model.DeploymentBranch, len(branches)),
+		Status:      model.DeploymentStatusEnqueued,
+		CreatedAt:   time.Now(),
+		AutoRebuild: f.AutoRebuild,
+		Branches:    make([]model.DeploymentBranch, len(branches)),
 	}
 	for i, b := range branches {
 		d.Branches[i] = model.DeploymentBranch{
@@ -241,6 +242,12 @@ func (c Controller) BuildBranchJob(ctx context.Context) {
 				}
 				break
 			}
+			go func(b model.Branch) {
+				err := c.services.Deployer.AutoRebuild(ctx, b)
+				if err != nil {
+					log.Println(err)
+				}
+			}(b)
 			log.Printf("The branch #%d is built\n", b.ID)
 		case <-ctx.Done():
 			return

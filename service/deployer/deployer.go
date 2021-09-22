@@ -132,6 +132,24 @@ func (s Deployer) Run(ctx context.Context) error {
 	return nil
 }
 
+// AutoRebuild enqueues all appropriate deployments to be re-built.
+func (s Deployer) AutoRebuild(ctx context.Context, b model.Branch) error {
+	deployments, err := s.deployments.FindForAutoRebuild(ctx, b)
+	if err != nil {
+		return fmt.Errorf("service.deployer.AutoRebuild: find deployments: %w; branch ID = %d", err, b.ID)
+	}
+	for _, d := range deployments {
+		d.Status = model.DeploymentStatusEnqueued
+		d, err = s.deployments.Update(ctx, d)
+		if err != nil {
+			log.Printf("service.deployer.AutoRebuild: update deployment #%d status to %s: %v\n", d.ID, d.Status, err)
+			continue
+		}
+		log.Printf("Deployment #%d is enqueued for auto-rebuilding\n", d.ID)
+	}
+	return nil
+}
+
 func (s Deployer) prepare(
 	ctx context.Context,
 	d *model.Deployment,

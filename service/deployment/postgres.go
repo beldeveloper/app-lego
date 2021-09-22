@@ -22,7 +22,7 @@ type Postgres struct {
 // FindAll returns all deployments.
 func (p Postgres) FindAll(ctx context.Context) ([]model.Deployment, error) {
 	q := fmt.Sprintf(
-		`SELECT "id", "status", "created_at", "branches" FROM "%s"."deployments" ORDER BY "created_at" DESC`,
+		`SELECT "id", "status", "created_at", "auto_rebuild", "branches" FROM "%s"."deployments" ORDER BY "created_at" DESC`,
 		p.schema,
 	)
 	rows, err := p.conn.Query(ctx, q)
@@ -33,9 +33,36 @@ func (p Postgres) FindAll(ctx context.Context) ([]model.Deployment, error) {
 	res := make([]model.Deployment, 0)
 	var d model.Deployment
 	for rows.Next() {
-		err = rows.Scan(&d.ID, &d.Status, &d.CreatedAt, &d.Branches)
+		err = rows.Scan(&d.ID, &d.Status, &d.CreatedAt, &d.AutoRebuild, &d.Branches)
 		if err != nil {
 			return nil, fmt.Errorf("service.deployment.postgres.FindAll: scan: %w", err)
+		}
+		res = append(res, d)
+	}
+	return res, nil
+}
+
+// FindForAutoRebuild returns all ready deployments that are marked as auto_rebuild and are bound to the specific branch.
+func (p Postgres) FindForAutoRebuild(ctx context.Context, b model.Branch) ([]model.Deployment, error) {
+	q := fmt.Sprintf(
+		`SELECT "d"."id", "d"."status", "d"."created_at", "d"."auto_rebuild", "d"."branches"
+		FROM "%s"."deployments" "d"
+		CROSS JOIN LATERAL JSONB_ARRAY_ELEMENTS("d"."branches") AS "b"
+		WHERE ("b"->>'id')::int = $1 AND "d"."auto_rebuild" = TRUE AND "d"."status" = $2
+		ORDER BY "created_at" DESC`,
+		p.schema,
+	)
+	rows, err := p.conn.Query(ctx, q, b.ID, model.DeploymentStatusReady)
+	if err != nil {
+		return nil, fmt.Errorf("service.deployment.postgres.FindForAutoRebuild: query: %w", err)
+	}
+	defer rows.Close()
+	res := make([]model.Deployment, 0)
+	var d model.Deployment
+	for rows.Next() {
+		err = rows.Scan(&d.ID, &d.Status, &d.CreatedAt, &d.AutoRebuild, &d.Branches)
+		if err != nil {
+			return nil, fmt.Errorf("service.deployment.postgres.FindForAutoRebuild: scan: %w", err)
 		}
 		res = append(res, d)
 	}
@@ -46,10 +73,10 @@ func (p Postgres) FindAll(ctx context.Context) ([]model.Deployment, error) {
 func (p Postgres) FindByID(ctx context.Context, id uint64) (model.Deployment, error) {
 	var d model.Deployment
 	q := fmt.Sprintf(
-		`SELECT "id", "status", "created_at", "branches" FROM "%s"."deployments" WHERE "id" = $1`,
+		`SELECT "id", "status", "created_at", "auto_rebuild", "branches" FROM "%s"."deployments" WHERE "id" = $1`,
 		p.schema,
 	)
-	err := p.conn.QueryRow(ctx, q, id).Scan(&d.ID, &d.Status, &d.CreatedAt, &d.Branches)
+	err := p.conn.QueryRow(ctx, q, id).Scan(&d.ID, &d.Status, &d.CreatedAt, &d.AutoRebuild, &d.Branches)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return d, model.ErrNotFound
@@ -62,11 +89,11 @@ func (p Postgres) FindByID(ctx context.Context, id uint64) (model.Deployment, er
 // Add saves a new deployment.
 func (p Postgres) Add(ctx context.Context, d model.Deployment) (model.Deployment, error) {
 	q := fmt.Sprintf(
-		`INSERT INTO "%s"."deployments" ("status", "created_at", "branches")
-		VALUES ($1, $2, $3) RETURNING "id"`,
+		`INSERT INTO "%s"."deployments" ("status", "created_at", "auto_rebuild", "branches")
+		VALUES ($1, $2, $3, $4) RETURNING "id"`,
 		p.schema,
 	)
-	err := p.conn.QueryRow(ctx, q, d.Status, d.CreatedAt, d.Branches).Scan(&d.ID)
+	err := p.conn.QueryRow(ctx, q, d.Status, d.CreatedAt, d.AutoRebuild, d.Branches).Scan(&d.ID)
 	if err != nil {
 		return d, fmt.Errorf("service.deployment.postgres.Add: insert: %w", err)
 	}

@@ -17,10 +17,11 @@ const (
 
 // Deployment is a model that represents a single deployment.
 type Deployment struct {
-	ID        uint64             `json:"id"`
-	Status    string             `json:"status"`
-	CreatedAt time.Time          `json:"createdAt"`
-	Branches  []DeploymentBranch `json:"branches"`
+	ID          uint64             `json:"id"`
+	Status      string             `json:"status"`
+	CreatedAt   time.Time          `json:"createdAt"`
+	AutoRebuild bool               `json:"autoRebuild"`
+	Branches    []DeploymentBranch `json:"branches"`
 }
 
 // DeploymentBranch is a model that contains a snapshot of the branch data used in the particular deployment.
@@ -31,5 +32,6 @@ type DeploymentBranch struct {
 
 // FormAddDeployment represents a form of new deployment.
 type FormAddDeployment struct {
-	Branches []uint64 `json:"branches"`
+	AutoRebuild bool     `json:"autoRebuild"`
+	Branches    []uint64 `json:"branches"`
 }
