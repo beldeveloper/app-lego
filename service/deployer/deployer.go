@@ -72,7 +72,7 @@ func (s Deployer) Run(ctx context.Context) error {
 	var applyChanges bool
 	for i, d := range deployments {
 		switch d.Status {
-		case model.DeploymentStatusReady, model.DeploymentStatusEnqueued, model.DeploymentStatusPendingRebuild:
+		case model.DeploymentStatusReady, model.DeploymentStatusEnqueued:
 			err = s.prepare(ctx, &d, repositoriesMap, branchesMap, &dockerCompose)
 			if err != nil {
 				log.Println(err)
@@ -98,28 +98,20 @@ func (s Deployer) Run(ctx context.Context) error {
 	defer func() {
 		var err error
 		for _, d := range deployments {
-			switch d.Status {
-			case model.DeploymentStatusBuilding, model.DeploymentStatusRebuilding:
-				if success {
-					d.Status = model.DeploymentStatusReady
-				} else {
-					d.Status = model.DeploymentStatusFailed
-				}
-			case model.DeploymentStatusPendingClose:
-				if success {
-					d.Status = model.DeploymentStatusClosed
-				} else {
-					continue
-				}
-			default:
+			if d.Status != model.DeploymentStatusBuilding {
 				continue
+			}
+			if success {
+				d.Status = model.DeploymentStatusReady
+			} else {
+				d.Status = model.DeploymentStatusFailed
 			}
 			d, err = s.deployments.Update(ctx, d)
 			if err != nil {
 				log.Printf("service.deployer.Run: update deployment #%d status to %s: %v\n", d.ID, d.Status, err)
 				continue
 			}
-			log.Printf("Deployment #%d is marked as %s\n", d.ID, d.Status)
+			log.Printf("Deployment #%d is %s\n", d.ID, d.Status)
 		}
 	}()
 	err = s.updateDockerCompose(dockerCompose)
@@ -188,8 +180,6 @@ func (s Deployer) prepare(
 	switch d.Status {
 	case model.DeploymentStatusEnqueued:
 		d.Status = model.DeploymentStatusBuilding
-	case model.DeploymentStatusPendingRebuild:
-		d.Status = model.DeploymentStatusRebuilding
 	case model.DeploymentStatusReady:
 	default:
 		return fmt.Errorf("service.deployer.prepare: deployment #%d: unexpected status: %s", d.ID, d.Status)

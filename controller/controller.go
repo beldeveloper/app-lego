@@ -101,7 +101,7 @@ func (c Controller) RebuildDeployment(ctx context.Context, id uint64) (model.Dep
 	if err != nil {
 		return d, fmt.Errorf("controller.RebuildDeployment: find by id: %w", err)
 	}
-	d.Status = model.DeploymentStatusPendingRebuild
+	d.Status = model.DeploymentStatusEnqueued
 	d, err = c.services.Deployment.Update(ctx, d)
 	if err != nil {
 		return d, fmt.Errorf("controller.RebuildDeployment: update: %w", err)
@@ -110,18 +110,18 @@ func (c Controller) RebuildDeployment(ctx context.Context, id uint64) (model.Dep
 	return d, nil
 }
 
-// CloseDeployment enqueues the existing deployment for closing.
+// CloseDeployment closes the existing deployment.
 func (c Controller) CloseDeployment(ctx context.Context, id uint64) error {
 	d, err := c.services.Deployment.FindByID(ctx, id)
 	if err != nil {
 		return fmt.Errorf("controller.DeleteDeployment: find by id: %w", err)
 	}
-	d.Status = model.DeploymentStatusPendingClose
+	d.Status = model.DeploymentStatusClosed
 	d, err = c.services.Deployment.Update(ctx, d)
 	if err != nil {
 		return fmt.Errorf("controller.DeleteDeployment: update: %w", err)
 	}
-	log.Printf("The deployment #%d is enqueued for closing\n", d.ID)
+	log.Printf("The deployment #%d is closed\n", d.ID)
 	return nil
 }
 

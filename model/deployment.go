@@ -3,20 +3,14 @@ package model
 import "time"
 
 const (
-	// DeploymentStatusEnqueued defines the status that means the deployment is recently added.
+	// DeploymentStatusEnqueued defines the status that means the deployment is ready to be built.
 	DeploymentStatusEnqueued = "enqueued"
 	// DeploymentStatusBuilding defines the status that means the application is building the deployment.
 	DeploymentStatusBuilding = "building"
-	// DeploymentStatusPendingRebuild defines the status that means the deployment is ready to be rebuilt.
-	DeploymentStatusPendingRebuild = "pending_rebuild"
-	// DeploymentStatusRebuilding defines the status that means the application is re-building the deployment.
-	DeploymentStatusRebuilding = "rebuilding"
 	// DeploymentStatusReady defines the status that means the deployment is built successfully.
 	DeploymentStatusReady = "ready"
 	// DeploymentStatusFailed defines the status that means the build attempt failed.
 	DeploymentStatusFailed = "failed"
-	// DeploymentStatusPendingClose defines the status that means the deployment is ready to be closed.
-	DeploymentStatusPendingClose = "pending_close"
 	// DeploymentStatusClosed defines the status that means the deployment is closed.
 	DeploymentStatusClosed = "closed"
 )
