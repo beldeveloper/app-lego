@@ -65,10 +65,7 @@ func (s Deployer) Run(ctx context.Context) error {
 	for _, b := range branches {
 		branchesMap[b.ID] = b
 	}
-	dockerCompose := model.DockerCompose{
-		Version:  model.DockerComposeVersion,
-		Services: make(map[string]model.DockerComposeService),
-	}
+	dockerCompose := s.basicComposeCfg()
 	var applyChanges bool
 	for i, d := range deployments {
 		switch d.Status {
@@ -225,4 +222,22 @@ func (s Deployer) updateDockerCompose(dc model.DockerCompose) error {
 		return fmt.Errorf("service.deployer.updateDockerCompose: write: %w", err)
 	}
 	return nil
+}
+
+func (s Deployer) basicComposeCfg() model.DockerCompose {
+	return model.DockerCompose{
+		Version: model.DockerComposeVersion,
+		Services: map[string]model.DockerComposeService{
+			"traefik": {
+				Image:   model.TraefikImage,
+				Ports:   []string{"80:80", "443:443"},
+				Volumes: []string{"/var/run/docker.sock:/var/run/docker.sock:ro"},
+				Command: []string{
+					"--api.insecure=true",
+					"--providers.docker=true",
+					"--providers.docker.exposedbydefault=false",
+				},
+			},
+		},
+	}
 }
