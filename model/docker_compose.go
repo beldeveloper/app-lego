@@ -19,7 +19,7 @@ type DockerComposeService struct {
 	Restart     string   `yaml:"restart,omitempty"`
 	Ports       []string `yaml:"ports,omitempty"`
 	Environment []string `yaml:"environment,omitempty"`
-	Command     []string `json:"command,omitempty"`
-	Volumes     []string `json:"volumes,omitempty"`
-	Labels      []string `json:"labels,omitempty"`
+	Command     []string `yaml:"command,omitempty"`
+	Volumes     []string `yaml:"volumes,omitempty"`
+	Labels      []string `yaml:"labels,omitempty"`
 }
