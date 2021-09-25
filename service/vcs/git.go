@@ -86,6 +86,15 @@ func (g Git) Branches(ctx context.Context, r model.Repository) ([]model.Branch, 
 func (g Git) SwitchBranch(ctx context.Context, r model.Repository, b model.Branch) error {
 	_, err := g.os.RunCmd(ctx, model.Cmd{
 		Name: "git",
+		Args: []string{"fetch"},
+		Dir:  g.workDir + "/" + r.Alias,
+		Log:  true,
+	})
+	if err != nil {
+		return fmt.Errorf("service.vcs.git.SwitchBranch: fetch: %w", err)
+	}
+	_, err = g.os.RunCmd(ctx, model.Cmd{
+		Name: "git",
 		Args: []string{"checkout", b.Name},
 		Dir:  g.workDir + "/" + r.Alias,
 		Log:  true,
