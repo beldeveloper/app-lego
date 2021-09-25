@@ -27,15 +27,15 @@ func (p Postgres) Sync(ctx context.Context, r model.Repository, branches []model
 	if err != nil {
 		return nil, fmt.Errorf("service.branch.postgres.Sync: find old: %w", err)
 	}
-	oldMap := make(map[string]*model.Branch)
+	oldMap := make(map[string]model.Branch)
 	for _, b := range old {
-		oldMap[b.Name] = &b
+		oldMap[b.Name] = b
 	}
 	res := make([]model.Branch, 0, len(branches))
 	keepMap := make(map[uint64]bool)
 	for _, b := range branches {
-		oldBranch := oldMap[b.Name]
-		if oldBranch == nil {
+		oldBranch, exists := oldMap[b.Name]
+		if !exists {
 			b.Status = model.BranchStatusPending
 			b, err = p.Add(ctx, b)
 			if err != nil {
@@ -49,6 +49,7 @@ func (p Postgres) Sync(ctx context.Context, r model.Repository, branches []model
 			continue
 		}
 		b.ID = oldBranch.ID
+		b.Status = model.BranchStatusPending
 		b, err = p.Update(ctx, b)
 		if err != nil {
 			return nil, fmt.Errorf("service.branch.postgres.Sync: update: %w", err)
