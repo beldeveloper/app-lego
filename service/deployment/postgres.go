@@ -33,6 +33,7 @@ func (p Postgres) FindAll(ctx context.Context) ([]model.Deployment, error) {
 	res := make([]model.Deployment, 0)
 	var d model.Deployment
 	for rows.Next() {
+		d.Branches = nil
 		err = rows.Scan(&d.ID, &d.Status, &d.CreatedAt, &d.AutoRebuild, &d.Branches)
 		if err != nil {
 			return nil, fmt.Errorf("service.deployment.postgres.FindAll: scan: %w", err)
@@ -60,6 +61,7 @@ func (p Postgres) FindForAutoRebuild(ctx context.Context, b model.Branch) ([]mod
 	res := make([]model.Deployment, 0)
 	var d model.Deployment
 	for rows.Next() {
+		d.Branches = nil
 		err = rows.Scan(&d.ID, &d.Status, &d.CreatedAt, &d.AutoRebuild, &d.Branches)
 		if err != nil {
 			return nil, fmt.Errorf("service.deployment.postgres.FindForAutoRebuild: scan: %w", err)
