@@ -233,9 +233,8 @@ func (s Deployer) basicComposeCfg() model.DockerCompose {
 				Ports:   []string{"80:80", "443:443"},
 				Volumes: []string{"/var/run/docker.sock:/var/run/docker.sock:ro"},
 				Command: []string{
-					"--api.insecure=true",
 					"--providers.docker=true",
-					"--providers.docker.exposedbydefault=false",
+					"--entrypoints.web.address=:80",
 				},
 			},
 		},
