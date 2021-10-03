@@ -12,14 +12,19 @@ import (
 )
 
 // NewVariable creates a new instance of the variables service.
-func NewVariable(marshaller marshaller.Service, repository repository.Service) Variable {
-	return Variable{marshaller: marshaller, repository: repository}
+func NewVariable(marshaller marshaller.Service, repository repository.Service, customFilesDir string) Variable {
+	return Variable{
+		marshaller:     marshaller,
+		repository:     repository,
+		customFilesDir: customFilesDir,
+	}
 }
 
 // Variable implements the variables service.
 type Variable struct {
-	marshaller marshaller.Service
-	repository repository.Service
+	marshaller     marshaller.Service
+	repository     repository.Service
+	customFilesDir string
 }
 
 // Replace puts the variables values to the configuration.
@@ -48,6 +53,7 @@ func (s Variable) Replace(ctx context.Context, data []byte, v model.Variables) (
 	if err != nil {
 		return nil, err
 	}
+	data = bytes.ReplaceAll(data, s.castString("{CUSTOM_FILES_DIR}"), s.castString(s.customFilesDir))
 	return data, nil
 }
 

@@ -31,3 +31,4 @@ The application requires Docker and Postgres.
 - BRANCH_NAME
 - BRANCH_HASH
 - DEPLOYMENT_ID
+- CUSTOM_FILES_DIR

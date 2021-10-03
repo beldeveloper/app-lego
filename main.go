@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -32,14 +33,15 @@ func main() {
 	if err != nil {
 		log.Fatalf("main: establish postgress connection: %v\n", err)
 	}
-	workDir := os.Getenv("APP_LEGO_WORKING_DIR")
+	workDir := strings.TrimRight(os.Getenv("APP_LEGO_WORKING_DIR"), "/")
 	repositoriesDir := workDir + "/repositories"
+	customFilesDir := workDir + "/custom_files"
 	var s service.Container
 	s.Repository = repository.NewPostgres(pgConn, pgSchema)
 	s.Branches = branch.NewPostgres(pgConn, pgSchema)
 	s.Deployment = deployment.NewPostgres(pgConn, pgSchema)
 	s.OS = appOs.NewOS()
-	s.Variable = variable.NewVariable(marshaller.NewYaml(), s.Repository)
+	s.Variable = variable.NewVariable(marshaller.NewYaml(), s.Repository, customFilesDir)
 	s.Validation = validation.NewValidation()
 	s.VCS = vcs.NewGit(repositoriesDir, s.OS, s.Variable, marshaller.NewYaml())
 	s.Builder = builder.NewBuilder(repositoriesDir, s.VCS, s.OS, s.Repository, s.Branches, marshaller.NewYaml())
