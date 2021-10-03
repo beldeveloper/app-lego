@@ -6,37 +6,46 @@ import (
 	"fmt"
 	"github.com/beldeveloper/app-lego/model"
 	"github.com/beldeveloper/app-lego/service/branch"
+	"github.com/beldeveloper/app-lego/service/marshaller"
 	"github.com/beldeveloper/app-lego/service/os"
 	"github.com/beldeveloper/app-lego/service/repository"
 	"github.com/beldeveloper/app-lego/service/vcs"
-	"gopkg.in/yaml.v2"
 	"log"
 	"strings"
 	"sync"
 )
 
 // NewBuilder creates a new instance of the branch builder.
-func NewBuilder(workDir string, vcs vcs.Service, os os.Service, repositories repository.Service, branches branch.Service) Builder {
+func NewBuilder(
+	workDir string,
+	vcs vcs.Service,
+	os os.Service,
+	repositories repository.Service,
+	branches branch.Service,
+	dockerMarshaller marshaller.Service,
+) Builder {
 	return Builder{
-		workDir:      workDir,
-		vcs:          vcs,
-		os:           os,
-		repositories: repositories,
-		branches:     branches,
-		mux:          &sync.RWMutex{},
-		queue:        make(map[uint64]bool),
+		workDir:          workDir,
+		vcs:              vcs,
+		os:               os,
+		repositories:     repositories,
+		branches:         branches,
+		mux:              &sync.RWMutex{},
+		queue:            make(map[uint64]bool),
+		dockerMarshaller: dockerMarshaller,
 	}
 }
 
 // Builder is a service that is in charge of building the repository branch.
 type Builder struct {
-	workDir      string
-	vcs          vcs.Service
-	os           os.Service
-	repositories repository.Service
-	branches     branch.Service
-	mux          *sync.RWMutex
-	queue        map[uint64]bool
+	workDir          string
+	vcs              vcs.Service
+	os               os.Service
+	repositories     repository.Service
+	branches         branch.Service
+	mux              *sync.RWMutex
+	queue            map[uint64]bool
+	dockerMarshaller marshaller.Service
 }
 
 // Enqueue puts the branch into building queue.
@@ -141,7 +150,7 @@ func (b Builder) prepareSteps(ctx context.Context, branch model.Branch) *buildin
 	finishStep := buildingStep{
 		name: "finish",
 		action: func() error {
-			data, err := yaml.Marshal(cfg.Compose)
+			data, err := b.dockerMarshaller.Marshal(cfg.Compose)
 			if err != nil {
 				return err
 			}

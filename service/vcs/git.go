@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/beldeveloper/app-lego/model"
+	"github.com/beldeveloper/app-lego/service/marshaller"
 	appOs "github.com/beldeveloper/app-lego/service/os"
 	"github.com/beldeveloper/app-lego/service/variable"
-	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"log"
 	"os"
@@ -16,11 +16,12 @@ import (
 )
 
 // NewGit creates a new instance of the Git VCS service.
-func NewGit(workDir string, os appOs.Service, variable variable.Service) Git {
+func NewGit(workDir string, os appOs.Service, variable variable.Service, cfgMarshaller marshaller.Service) Git {
 	return Git{
 		workDir:        workDir,
 		os:             os,
 		variable:       variable,
+		cfgMarshaller:  cfgMarshaller,
 		remoteBranchRx: regexp.MustCompile("^([a-f0-9]+)\\s+refs/(heads|tags)/(.*)$"),
 	}
 }
@@ -30,6 +31,7 @@ type Git struct {
 	workDir        string
 	os             appOs.Service
 	variable       variable.Service
+	cfgMarshaller  marshaller.Service
 	remoteBranchRx *regexp.Regexp
 }
 
@@ -138,7 +140,7 @@ func (g Git) ReadConfiguration(ctx context.Context, r model.Repository, b model.
 	if err != nil {
 		return cfg, fmt.Errorf("service.vcs.git.ReadConfiguration: replace variables: %w; branch ID = %d", err, b.ID)
 	}
-	err = yaml.Unmarshal(cfgData, &cfg)
+	err = g.cfgMarshaller.Unmarshal(cfgData, &cfg)
 	if err != nil {
 		return cfg, fmt.Errorf("service.vcs.git.ReadConfiguration: unmarshal cfg file: %w; branch ID = %d", err, b.ID)
 	}

@@ -10,6 +10,7 @@ import (
 	"github.com/beldeveloper/app-lego/service/builder"
 	"github.com/beldeveloper/app-lego/service/deployer"
 	"github.com/beldeveloper/app-lego/service/deployment"
+	"github.com/beldeveloper/app-lego/service/marshaller"
 	appOs "github.com/beldeveloper/app-lego/service/os"
 	"github.com/beldeveloper/app-lego/service/repository"
 	"github.com/beldeveloper/app-lego/service/validation"
@@ -40,9 +41,9 @@ func main() {
 	s.OS = appOs.NewOS()
 	s.Variable = variable.NewVariable()
 	s.Validation = validation.NewValidation()
-	s.VCS = vcs.NewGit(repositoriesDir, s.OS, s.Variable)
-	s.Builder = builder.NewBuilder(repositoriesDir, s.VCS, s.OS, s.Repository, s.Branches)
-	s.Deployer = deployer.NewDeployer(s.Repository, s.Branches, s.Deployment, s.OS, s.Variable, workDir)
+	s.VCS = vcs.NewGit(repositoriesDir, s.OS, s.Variable, marshaller.NewYaml())
+	s.Builder = builder.NewBuilder(repositoriesDir, s.VCS, s.OS, s.Repository, s.Branches, marshaller.NewYaml())
+	s.Deployer = deployer.NewDeployer(s.Repository, s.Branches, s.Deployment, s.OS, s.Variable, marshaller.NewYaml(), workDir)
 	c := controller.NewController(s)
 	go c.DownloadRepositoryJob(ctx)
 	go c.SyncRepositoryJob(ctx)

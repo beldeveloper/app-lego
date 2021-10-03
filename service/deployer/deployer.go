@@ -6,10 +6,10 @@ import (
 	"github.com/beldeveloper/app-lego/model"
 	"github.com/beldeveloper/app-lego/service/branch"
 	"github.com/beldeveloper/app-lego/service/deployment"
+	"github.com/beldeveloper/app-lego/service/marshaller"
 	appOs "github.com/beldeveloper/app-lego/service/os"
 	"github.com/beldeveloper/app-lego/service/repository"
 	"github.com/beldeveloper/app-lego/service/variable"
-	"gopkg.in/yaml.v2"
 	"log"
 	"os"
 )
@@ -21,26 +21,29 @@ func NewDeployer(
 	deployments deployment.Service,
 	os appOs.Service,
 	variables variable.Service,
+	dockerMarshaller marshaller.Service,
 	workDir string,
 ) Deployer {
 	return Deployer{
-		repositories: repositories,
-		branches:     branches,
-		deployments:  deployments,
-		os:           os,
-		variables:    variables,
-		workDir:      workDir,
+		repositories:     repositories,
+		branches:         branches,
+		deployments:      deployments,
+		os:               os,
+		variables:        variables,
+		dockerMarshaller: dockerMarshaller,
+		workDir:          workDir,
 	}
 }
 
 // Deployer implements the deployer service.
 type Deployer struct {
-	repositories repository.Service
-	branches     branch.Service
-	deployments  deployment.Service
-	os           appOs.Service
-	variables    variable.Service
-	workDir      string
+	repositories     repository.Service
+	branches         branch.Service
+	deployments      deployment.Service
+	os               appOs.Service
+	variables        variable.Service
+	dockerMarshaller marshaller.Service
+	workDir          string
 }
 
 // Run watches for the deployments state, builds, rebuilds, closes them.
@@ -183,7 +186,7 @@ func (s Deployer) prepare(
 			return fmt.Errorf("service.deployer.prepare: deployment #%d: put variables to docker compose cfg for branch #%d", d.ID, b.ID)
 		}
 		var bdc model.DockerCompose
-		err = yaml.Unmarshal(bdcData, &bdc)
+		err = s.dockerMarshaller.Unmarshal(bdcData, &bdc)
 		if err != nil {
 			return fmt.Errorf("service.deployer.prepare: deployment #%d: unmarshal compose cfg for branch #%d: %w", d.ID, b.ID, err)
 		}
@@ -203,7 +206,7 @@ func (s Deployer) prepare(
 }
 
 func (s Deployer) updateDockerCompose(dc model.DockerCompose) error {
-	dcData, err := yaml.Marshal(dc)
+	dcData, err := s.dockerMarshaller.Marshal(dc)
 	if err != nil {
 		return fmt.Errorf("service.deployer.updateDockerCompose: marshal: %w", err)
 	}
