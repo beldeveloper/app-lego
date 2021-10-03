@@ -25,7 +25,7 @@ func NewBuilder(
 	dockerMarshaller marshaller.Service,
 ) Builder {
 	return Builder{
-		workDir:          workDir,
+		workDir:          strings.TrimRight(workDir, "/"),
 		vcs:              vcs,
 		os:               os,
 		repositories:     repositories,
@@ -167,7 +167,9 @@ func (b Builder) prepareSteps(ctx context.Context, branch model.Branch) *buildin
 		for _, cmd := range cfg.Commands() {
 			cmd := cmd
 			cmd.Log = true
-			if strings.HasPrefix(cmd.Dir, ".") {
+			if cmd.Dir == "" {
+				cmd.Dir = b.workDir + "/" + r.Alias
+			} else if strings.HasPrefix(cmd.Dir, ".") {
 				cmd.Dir = b.workDir + "/" + r.Alias + "/" + cmd.Dir
 			}
 			step := buildingStep{

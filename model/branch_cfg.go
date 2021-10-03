@@ -1,5 +1,7 @@
 package model
 
+import "strings"
+
 // BranchCfg is a model that represents branch build configuration.
 type BranchCfg struct {
 	Steps   map[string]BranchCfgStep `yaml:"steps"`
@@ -27,6 +29,8 @@ func (cfg BranchCfg) Commands() []Cmd {
 		for i, cmd := range step.Commands {
 			if cmd.Dir == "" {
 				step.Commands[i].Dir = step.Dir
+			} else if step.Dir != "" && strings.HasPrefix(cmd.Dir, ".") {
+				step.Commands[i].Dir = strings.TrimRight(step.Dir, "/") + "/" + cmd.Dir
 			}
 		}
 		commands = append(commands, step.Commands...)
