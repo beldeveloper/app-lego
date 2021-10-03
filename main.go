@@ -39,7 +39,7 @@ func main() {
 	s.Branches = branch.NewPostgres(pgConn, pgSchema)
 	s.Deployment = deployment.NewPostgres(pgConn, pgSchema)
 	s.OS = appOs.NewOS()
-	s.Variable = variable.NewVariable()
+	s.Variable = variable.NewVariable(marshaller.NewYaml(), s.Repository)
 	s.Validation = validation.NewValidation()
 	s.VCS = vcs.NewGit(repositoriesDir, s.OS, s.Variable, marshaller.NewYaml())
 	s.Builder = builder.NewBuilder(repositoriesDir, s.VCS, s.OS, s.Repository, s.Branches, marshaller.NewYaml())

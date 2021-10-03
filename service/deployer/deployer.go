@@ -183,7 +183,7 @@ func (s Deployer) prepare(
 		})
 		if err != nil {
 			d.Status = model.DeploymentStatusFailed
-			return fmt.Errorf("service.deployer.prepare: deployment #%d: put variables to docker compose cfg for branch #%d", d.ID, b.ID)
+			return fmt.Errorf("service.deployer.prepare: deployment #%d: put variables to docker compose cfg for branch #%d: %w", d.ID, b.ID, err)
 		}
 		var bdc model.DockerCompose
 		err = s.dockerMarshaller.Unmarshal(bdcData, &bdc)
