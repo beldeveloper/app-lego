@@ -1,13 +1,16 @@
 package model
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // BranchCfg is a model that represents branch build configuration.
 type BranchCfg struct {
 	Steps     map[string]BranchCfgStep `yaml:"steps"`
 	Build     []string                 `yaml:"build"`
 	Compose   DockerCompose            `yaml:"compose"`
-	Variables []string                 `yaml:"variables"`
+	Variables []Variable               `yaml:"-"`
 }
 
 // BranchCfgStep is a model that represents branch configuration step.
@@ -22,6 +25,10 @@ func (cfg BranchCfg) Commands() []Cmd {
 	commands := make([]Cmd, 0, len(cfg.Steps)*5) // approx. capacity
 	var step BranchCfgStep
 	var exists bool
+	env := make([]string, len(cfg.Variables))
+	for i, v := range cfg.Variables {
+		env[i] = fmt.Sprintf("%s=%s", v.Name, v.Value)
+	}
 	for _, sName := range cfg.Build {
 		step, exists = cfg.Steps[sName]
 		if !exists {
@@ -33,7 +40,7 @@ func (cfg BranchCfg) Commands() []Cmd {
 			} else if step.Dir != "" && strings.HasPrefix(cmd.Dir, ".") {
 				cmd.Dir = strings.TrimRight(step.Dir, "/") + "/" + cmd.Dir
 			}
-			cmd.Env = append(cmd.Env, cfg.Variables...)
+			cmd.Env = append(cmd.Env, env...)
 			step.Commands[i] = cmd
 		}
 		commands = append(commands, step.Commands...)

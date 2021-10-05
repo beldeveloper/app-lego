@@ -167,10 +167,6 @@ func (b Builder) prepareSteps(ctx context.Context, branch model.Branch) *buildin
 		if err != nil {
 			return err
 		}
-		env, err := b.variables.ListEnv(ctx, model.Variables{Repository: r, Branch: branch})
-		if err != nil {
-			return err
-		}
 		currStep := &readConfigurationStep
 		for _, cmd := range cfg.Commands() {
 			cmd := cmd
@@ -180,7 +176,6 @@ func (b Builder) prepareSteps(ctx context.Context, branch model.Branch) *buildin
 			} else if strings.HasPrefix(cmd.Dir, ".") {
 				cmd.Dir = b.workDir + "/" + r.Alias + "/" + cmd.Dir
 			}
-			cmd.Env = append(cmd.Env, env...)
 			step := buildingStep{
 				name: "command: " + cmd.Name + " " + strings.Join(cmd.Args, " "),
 				action: func() error {

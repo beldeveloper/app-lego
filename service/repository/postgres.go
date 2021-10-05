@@ -122,8 +122,8 @@ func (p Postgres) Update(ctx context.Context, r model.Repository) (model.Reposit
 }
 
 // LoadSecrets reads the secret variables for the specific repository.
-func (p Postgres) LoadSecrets(ctx context.Context, r model.Repository) ([]model.Secret, error) {
-	var res []model.Secret
+func (p Postgres) LoadSecrets(ctx context.Context, r model.Repository) ([]model.Variable, error) {
+	var res []model.Variable
 	q := fmt.Sprintf(`SELECT "secrets" FROM "%s"."repositories" WHERE "id" = $1`, p.schema)
 	err := p.conn.QueryRow(ctx, q, r.ID).Scan(&res)
 	if err != nil {
@@ -132,11 +132,14 @@ func (p Postgres) LoadSecrets(ctx context.Context, r model.Repository) ([]model.
 		}
 		return nil, fmt.Errorf("service.repository.postgres.LoadSecrets: query: %w", err)
 	}
+	for i := range res {
+		res[i].Type = model.VariableTypeSecret
+	}
 	return res, nil
 }
 
 // SaveSecrets saves the secret variables for the specific repository.
-func (p Postgres) SaveSecrets(ctx context.Context, r model.Repository, secrets []model.Secret) error {
+func (p Postgres) SaveSecrets(ctx context.Context, r model.Repository, secrets []model.Variable) error {
 	q := fmt.Sprintf(`UPDATE "%s"."repositories" SET "secrets" = $2 WHERE "id" = $1`, p.schema)
 	_, err := p.conn.Exec(ctx, q, r.ID, secrets)
 	if err != nil {

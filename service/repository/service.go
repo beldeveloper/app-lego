@@ -14,6 +14,6 @@ type Service interface {
 	FindOutdated(ctx context.Context) (model.Repository, error)
 	Add(ctx context.Context, r model.Repository) (model.Repository, error)
 	Update(ctx context.Context, r model.Repository) (model.Repository, error)
-	LoadSecrets(ctx context.Context, r model.Repository) ([]model.Secret, error)
-	SaveSecrets(ctx context.Context, r model.Repository, secrets []model.Secret) error
+	LoadSecrets(ctx context.Context, r model.Repository) ([]model.Variable, error)
+	SaveSecrets(ctx context.Context, r model.Repository, secrets []model.Variable) error
 }

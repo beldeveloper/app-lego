@@ -27,90 +27,147 @@ type Variable struct {
 	customFilesDir string
 }
 
-// List returns the list of all available variables and their values.
-func (s Variable) List(ctx context.Context, v model.Variables) (map[string]string, error) {
-	list := make(map[string]string)
+// ListFromSources returns the list of all available variables and their values according to the specific sources.
+func (s Variable) ListFromSources(ctx context.Context, v model.VariablesSources) (list []model.Variable, err error) {
+	sources := []func() ([]model.Variable, error){
+		func() ([]model.Variable, error) {
+			return s.ListStatic(ctx)
+		},
+	}
 	if v.Repository.ID > 0 {
-		list["REPOSITORY_ID"] = strconv.Itoa(int(v.Repository.ID))
-		list["REPOSITORY_TYPE"] = v.Repository.Type
-		list["REPOSITORY_NAME"] = v.Repository.Name
-		list["REPOSITORY_ALIAS"] = v.Repository.Alias
-		err := s.addRepositorySecretsToList(ctx, v.Repository, list)
-		if err != nil {
-			return nil, err
-		}
+		sources = append(sources, func() ([]model.Variable, error) {
+			return s.ListForRepository(ctx, v.Repository)
+		})
 	}
 	if v.Branch.ID > 0 {
-		list["BRANCH_ID"] = strconv.Itoa(int(v.Branch.ID))
-		list["BRANCH_TYPE"] = v.Branch.Type
-		list["BRANCH_NAME"] = v.Branch.Name
-		list["BRANCH_HASH"] = v.Branch.Hash
+		sources = append(sources, func() ([]model.Variable, error) {
+			return s.ListForBranch(ctx, v.Branch)
+		})
 	}
 	if v.Deployment.ID > 0 {
-		list["DEPLOYMENT_ID"] = strconv.Itoa(int(v.Deployment.ID))
+		sources = append(sources, func() ([]model.Variable, error) {
+			return s.ListForDeployment(ctx, v.Deployment)
+		})
 	}
-	list["CUSTOM_FILES_DIR"] = s.customFilesDir
-	return list, nil
+	if v.CustomData != nil {
+		sources = append(sources, func() ([]model.Variable, error) {
+			return s.ListCustom(ctx, v.CustomData)
+		})
+	}
+	var sourceList []model.Variable
+	for _, source := range sources {
+		sourceList, err = source()
+		if err != nil {
+			return
+		}
+		list = append(list, sourceList...)
+	}
+	return
 }
 
-// ListEnv returns the list of all available variables and their values in the format of environment variables.
-func (s Variable) ListEnv(ctx context.Context, v model.Variables) ([]string, error) {
-	list, err := s.List(ctx, v)
-	if err != nil {
-		return nil, err
-	}
-	listEnv := make([]string, 0, len(list))
-	for k, v := range list {
-		listEnv = append(listEnv, fmt.Sprintf("%s=%s", k, v))
-	}
-	return listEnv, nil
-}
-
-// Replace puts the variables values to the configuration.
-func (s Variable) Replace(ctx context.Context, data []byte, v model.Variables) ([]byte, error) {
-	list, err := s.List(ctx, v)
-	if err != nil {
-		return nil, err
-	}
-	err = s.addCustomVariablesToList(data, list)
-	if err != nil {
-		return nil, err
-	}
-	for k, v := range list {
-		data = bytes.ReplaceAll(data, s.castString("{"+k+"}"), s.castString(v))
-	}
-	return data, nil
-}
-
-func (s Variable) castString(v string) []byte {
-	return []byte(v)
-}
-
-func (s Variable) addRepositorySecretsToList(ctx context.Context, r model.Repository, list map[string]string) error {
-	secrets, err := s.repository.LoadSecrets(ctx, r)
-	if err != nil {
-		return err
-	}
-	for _, secret := range secrets {
-		list[secret.Name] = secret.Value
-	}
-	return nil
-}
-
-func (s Variable) addCustomVariablesToList(data []byte, list map[string]string) error {
+// ListCustom parses the configuration data and returns the custom variables.
+func (s Variable) ListCustom(ctx context.Context, data []byte) ([]model.Variable, error) {
 	var cfg struct {
-		Variables []string `yaml:"variables"`
+		Variables []string `yaml:"variables" json:"variables" xml:"variables" bson:"variables"`
 	}
 	err := s.marshaller.Unmarshal(data, &cfg)
 	if err != nil {
-		return fmt.Errorf("service.variable.addCustomVariablesToList: unmarshal: %w", err)
+		return nil, fmt.Errorf("service.variable.ReadCustom: unmarshal: %w", err)
 	}
-	for _, v := range cfg.Variables {
+	list := make([]model.Variable, len(cfg.Variables))
+	for i, v := range cfg.Variables {
 		parts := strings.SplitN(v, "=", 2)
 		if len(v) < 2 {
 			continue
 		}
-		list[parts[0]] = parts[1]
+		list[i] = model.Variable{
+			Type:  model.VariableTypeCustom,
+			Name:  parts[0],
+			Value: parts[1],
+		}
 	}
-	return nil
+	return list, nil
+}
+
+func (s Variable) ListForRepository(ctx context.Context, r model.Repository) ([]model.Variable, error) {
+	secrets, err := s.repository.LoadSecrets(ctx, r)
+	if err != nil {
+		return nil, err
+	}
+	variables := []model.Variable{
+		{
+			Type:  model.VariableTypeBuilding,
+			Name:  "REPOSITORY_ID",
+			Value: strconv.Itoa(int(r.ID)),
+		},
+		{
+			Type:  model.VariableTypeBuilding,
+			Name:  "REPOSITORY_TYPE",
+			Value: r.Type,
+		},
+		{
+			Type:  model.VariableTypeBuilding,
+			Name:  "REPOSITORY_NAME",
+			Value: r.Name,
+		},
+		{
+			Type:  model.VariableTypeBuilding,
+			Name:  "REPOSITORY_ALIAS",
+			Value: r.Alias,
+		},
+	}
+	return append(variables, secrets...), nil
+}
+
+func (s Variable) ListForBranch(ctx context.Context, b model.Branch) ([]model.Variable, error) {
+	return []model.Variable{
+		{
+			Type:  model.VariableTypeBuilding,
+			Name:  "BRANCH_ID",
+			Value: strconv.Itoa(int(b.ID)),
+		},
+		{
+			Type:  model.VariableTypeBuilding,
+			Name:  "BRANCH_TYPE",
+			Value: b.Type,
+		},
+		{
+			Type:  model.VariableTypeBuilding,
+			Name:  "BRANCH_NAME",
+			Value: b.Name,
+		},
+		{
+			Type:  model.VariableTypeBuilding,
+			Name:  "BRANCH_HASH",
+			Value: b.Hash,
+		},
+	}, nil
+}
+
+func (s Variable) ListForDeployment(ctx context.Context, d model.Deployment) ([]model.Variable, error) {
+	return []model.Variable{
+		{
+			Type:  model.VariableTypeBuilding,
+			Name:  "DEPLOYMENT_ID",
+			Value: strconv.Itoa(int(d.ID)),
+		},
+	}, nil
+}
+
+func (s Variable) ListStatic(ctx context.Context) ([]model.Variable, error) {
+	return []model.Variable{
+		{
+			Type:  model.VariableTypeBuilding,
+			Name:  "CUSTOM_FILES_DIR",
+			Value: s.customFilesDir,
+		},
+	}, nil
+}
+
+// Replace puts the variables values to the configuration.
+func (s Variable) Replace(ctx context.Context, data []byte, variables []model.Variable) ([]byte, error) {
+	for _, v := range variables {
+		data = bytes.ReplaceAll(data, []byte("{"+v.Name+"}"), []byte(v.Value))
+	}
+	return data, nil
 }

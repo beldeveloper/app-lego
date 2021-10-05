@@ -135,7 +135,11 @@ func (g Git) ReadConfiguration(ctx context.Context, r model.Repository, b model.
 	if err != nil {
 		return cfg, fmt.Errorf("service.vcs.git.ReadConfiguration: read cfg file: %w; branch ID = %d", err, b.ID)
 	}
-	cfgData, err = g.variable.Replace(ctx, cfgData, model.Variables{Repository: r, Branch: b})
+	cfg.Variables, err = g.variable.ListFromSources(ctx, model.VariablesSources{Repository: r, Branch: b, CustomData: cfgData})
+	if err != nil {
+		return cfg, fmt.Errorf("service.vcs.git.ReadConfiguration: list variables: %w; branch ID = %d", err, b.ID)
+	}
+	cfgData, err = g.variable.Replace(ctx, cfgData, cfg.Variables)
 	if err != nil {
 		return cfg, fmt.Errorf("service.vcs.git.ReadConfiguration: replace variables: %w; branch ID = %d", err, b.ID)
 	}

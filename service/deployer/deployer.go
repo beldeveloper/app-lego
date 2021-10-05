@@ -48,14 +48,6 @@ type Deployer struct {
 
 // Run watches for the deployments state, builds, rebuilds, closes them.
 func (s Deployer) Run(ctx context.Context) error {
-	repositories, err := s.repositories.FindAll(ctx)
-	if err != nil {
-		return fmt.Errorf("service.deployer.Run: find repositories: %w", err)
-	}
-	repositoriesMap := make(map[uint64]model.Repository)
-	for _, r := range repositories {
-		repositoriesMap[r.ID] = r
-	}
 	deployments, err := s.deployments.FindAll(ctx)
 	if err != nil {
 		return fmt.Errorf("service.deployer.Run: find deployments: %w", err)
@@ -73,7 +65,7 @@ func (s Deployer) Run(ctx context.Context) error {
 	for i, d := range deployments {
 		switch d.Status {
 		case model.DeploymentStatusReady, model.DeploymentStatusEnqueued:
-			err = s.prepare(ctx, &d, repositoriesMap, branchesMap, &dockerCompose)
+			err = s.prepare(ctx, &d, branchesMap, &dockerCompose)
 			if err != nil {
 				log.Println(err)
 			}
@@ -153,12 +145,10 @@ func (s Deployer) AutoRebuild(ctx context.Context, b model.Branch) error {
 func (s Deployer) prepare(
 	ctx context.Context,
 	d *model.Deployment,
-	rm map[uint64]model.Repository,
 	bm map[uint64]model.Branch,
 	dc *model.DockerCompose,
 ) error {
 	var b model.Branch
-	var r model.Repository
 	var ok bool
 	for i, db := range d.Branches {
 		b, ok = bm[db.ID]
@@ -166,21 +156,16 @@ func (s Deployer) prepare(
 			d.Status = model.DeploymentStatusFailed
 			return fmt.Errorf("service.deployer.prepare: deployment #%d points to deleted branch #%d", d.ID, db.ID)
 		}
-		r, ok = rm[b.RepositoryID]
-		if !ok {
-			d.Status = model.DeploymentStatusFailed
-			return fmt.Errorf("service.deployer.prepare: deployment #%d points to deleted repository #%d", d.ID, b.RepositoryID)
-		}
 		bdcData, err := s.branches.LoadComposeData(ctx, b)
 		if err != nil {
 			d.Status = model.DeploymentStatusFailed
 			return fmt.Errorf("service.deployer.prepare: deployment #%d: load docker compose cfg for branch #%d", d.ID, b.ID)
 		}
-		bdcData, err = s.variables.Replace(ctx, bdcData, model.Variables{
-			Repository: r,
-			Branch:     b,
-			Deployment: *d,
-		})
+		variables, err := s.variables.ListForDeployment(ctx, *d)
+		if err != nil {
+			return fmt.Errorf("service.deployer.prepare: list variables: %w; deployment ID = %d", err, d.ID)
+		}
+		bdcData, err = s.variables.Replace(ctx, bdcData, variables)
 		if err != nil {
 			d.Status = model.DeploymentStatusFailed
 			return fmt.Errorf("service.deployer.prepare: deployment #%d: put variables to docker compose cfg for branch #%d: %w", d.ID, b.ID, err)
