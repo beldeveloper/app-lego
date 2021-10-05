@@ -4,9 +4,10 @@ import "strings"
 
 // BranchCfg is a model that represents branch build configuration.
 type BranchCfg struct {
-	Steps   map[string]BranchCfgStep `yaml:"steps"`
-	Build   []string                 `yaml:"build"`
-	Compose DockerCompose            `yaml:"compose"`
+	Steps     map[string]BranchCfgStep `yaml:"steps"`
+	Build     []string                 `yaml:"build"`
+	Compose   DockerCompose            `yaml:"compose"`
+	Variables []string                 `yaml:"variables"`
 }
 
 // BranchCfgStep is a model that represents branch configuration step.
@@ -28,10 +29,12 @@ func (cfg BranchCfg) Commands() []Cmd {
 		}
 		for i, cmd := range step.Commands {
 			if cmd.Dir == "" {
-				step.Commands[i].Dir = step.Dir
+				cmd.Dir = step.Dir
 			} else if step.Dir != "" && strings.HasPrefix(cmd.Dir, ".") {
-				step.Commands[i].Dir = strings.TrimRight(step.Dir, "/") + "/" + cmd.Dir
+				cmd.Dir = strings.TrimRight(step.Dir, "/") + "/" + cmd.Dir
 			}
+			cmd.Env = append(cmd.Env, cfg.Variables...)
+			step.Commands[i] = cmd
 		}
 		commands = append(commands, step.Commands...)
 	}

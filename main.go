@@ -44,7 +44,7 @@ func main() {
 	s.Variable = variable.NewVariable(marshaller.NewYaml(), s.Repository, customFilesDir)
 	s.Validation = validation.NewValidation()
 	s.VCS = vcs.NewGit(repositoriesDir, s.OS, s.Variable, marshaller.NewYaml())
-	s.Builder = builder.NewBuilder(repositoriesDir, s.VCS, s.OS, s.Repository, s.Branches, marshaller.NewYaml())
+	s.Builder = builder.NewBuilder(repositoriesDir, s.VCS, s.OS, s.Repository, s.Branches, s.Variable, marshaller.NewYaml())
 	s.Deployer = deployer.NewDeployer(s.Repository, s.Branches, s.Deployment, s.OS, s.Variable, marshaller.NewYaml(), workDir)
 	c := controller.NewController(s)
 	go c.DownloadRepositoryJob(ctx)

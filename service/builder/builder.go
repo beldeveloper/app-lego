@@ -9,6 +9,7 @@ import (
 	"github.com/beldeveloper/app-lego/service/marshaller"
 	"github.com/beldeveloper/app-lego/service/os"
 	"github.com/beldeveloper/app-lego/service/repository"
+	"github.com/beldeveloper/app-lego/service/variable"
 	"github.com/beldeveloper/app-lego/service/vcs"
 	"log"
 	"strings"
@@ -22,6 +23,7 @@ func NewBuilder(
 	os os.Service,
 	repositories repository.Service,
 	branches branch.Service,
+	variables variable.Service,
 	dockerMarshaller marshaller.Service,
 ) Builder {
 	return Builder{
@@ -32,6 +34,7 @@ func NewBuilder(
 		branches:         branches,
 		mux:              &sync.RWMutex{},
 		queue:            make(map[uint64]bool),
+		variables:        variables,
 		dockerMarshaller: dockerMarshaller,
 	}
 }
@@ -45,6 +48,7 @@ type Builder struct {
 	branches         branch.Service
 	mux              *sync.RWMutex
 	queue            map[uint64]bool
+	variables        variable.Service
 	dockerMarshaller marshaller.Service
 }
 
@@ -163,6 +167,10 @@ func (b Builder) prepareSteps(ctx context.Context, branch model.Branch) *buildin
 		if err != nil {
 			return err
 		}
+		env, err := b.variables.ListEnv(ctx, model.Variables{Repository: r, Branch: branch})
+		if err != nil {
+			return err
+		}
 		currStep := &readConfigurationStep
 		for _, cmd := range cfg.Commands() {
 			cmd := cmd
@@ -172,6 +180,7 @@ func (b Builder) prepareSteps(ctx context.Context, branch model.Branch) *buildin
 			} else if strings.HasPrefix(cmd.Dir, ".") {
 				cmd.Dir = b.workDir + "/" + r.Alias + "/" + cmd.Dir
 			}
+			cmd.Env = append(cmd.Env, env...)
 			step := buildingStep{
 				name: "command: " + cmd.Name + " " + strings.Join(cmd.Args, " "),
 				action: func() error {

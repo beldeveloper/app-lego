@@ -37,13 +37,12 @@ type Git struct {
 
 // DownloadRepository downloads the repository to the working directory.
 func (g Git) DownloadRepository(ctx context.Context, r model.Repository) error {
-	cmd := model.Cmd{
+	_, err := g.os.RunCmd(ctx, model.Cmd{
 		Name: "git",
 		Args: []string{"clone", r.Name, r.Alias},
 		Dir:  g.workDir,
 		Log:  true,
-	}
-	_, err := g.os.RunCmd(ctx, cmd)
+	})
 	if err != nil {
 		return fmt.Errorf("service.vcs.git.DownloadRepository: clone repository %d: %w", r.ID, err)
 	}
