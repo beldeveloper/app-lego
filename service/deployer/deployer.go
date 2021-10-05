@@ -232,13 +232,17 @@ func (s Deployer) basicComposeCfg() model.DockerCompose {
 		Version: model.DockerComposeVersion,
 		Services: map[string]model.DockerComposeService{
 			"traefik": {
-				Image:   model.TraefikImage,
-				Ports:   []string{"80:80", "443:443"},
-				Volumes: []string{"/var/run/docker.sock:/var/run/docker.sock:ro"},
-				Command: []string{
+				Image: model.TraefikImage,
+				Ports: []string{"80:80", "443:443"},
+				Volumes: []string{
+					"/var/run/docker.sock:/var/run/docker.sock:ro",
+					"./traefik.toml:/traefik.toml:ro",
+					"./crt:/crt:ro",
+				},
+				/*Command: []string{
 					"--providers.docker=true",
 					"--entrypoints.web.address=:80",
-				},
+				},*/
 			},
 		},
 	}
