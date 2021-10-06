@@ -12,11 +12,11 @@ import (
 )
 
 // NewVariable creates a new instance of the variables service.
-func NewVariable(marshaller marshaller.Service, repository repository.Service, customFilesDir string) Variable {
+func NewVariable(marshaller marshaller.Service, repository repository.Service, workDir model.FilePath) Service {
 	return Variable{
 		marshaller:     marshaller,
 		repository:     repository,
-		customFilesDir: customFilesDir,
+		customFilesDir: string(workDir + "/" + model.CustomDir),
 	}
 }
 

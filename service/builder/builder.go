@@ -17,16 +17,16 @@ import (
 
 // NewBuilder creates a new instance of the branch builder.
 func NewBuilder(
-	workDir string,
+	workDir model.FilePath,
 	vcs vcs.Service,
 	os os.Service,
 	repositories repository.Service,
 	branches branch.Service,
 	variables variable.Service,
 	dockerMarshaller marshaller.Service,
-) Builder {
+) Service {
 	return Builder{
-		workDir:          strings.TrimRight(workDir, "/"),
+		workDir:          string(workDir + "/" + model.RepositoriesDir),
 		vcs:              vcs,
 		os:               os,
 		repositories:     repositories,

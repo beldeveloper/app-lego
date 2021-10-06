@@ -8,7 +8,7 @@ import (
 )
 
 // NewValidation creates a new instance of the validation service.
-func NewValidation() Validation {
+func NewValidation() Service {
 	return Validation{}
 }
 

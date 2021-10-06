@@ -12,7 +12,7 @@ import (
 )
 
 // NewOS creates a new instance of the OS module.
-func NewOS() OS {
+func NewOS() Service {
 	return OS{}
 }
 

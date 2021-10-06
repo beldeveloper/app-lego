@@ -16,9 +16,9 @@ import (
 )
 
 // NewGit creates a new instance of the Git VCS service.
-func NewGit(workDir string, os appOs.Service, variable variable.Service, cfgMarshaller marshaller.Service) Git {
+func NewGit(workDir model.FilePath, os appOs.Service, variable variable.Service, cfgMarshaller marshaller.Service) Service {
 	return Git{
-		workDir:        workDir,
+		workDir:        string(workDir + "/" + model.RepositoriesDir),
 		os:             os,
 		variable:       variable,
 		cfgMarshaller:  cfgMarshaller,

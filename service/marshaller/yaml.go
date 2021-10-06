@@ -3,7 +3,7 @@ package marshaller
 import "gopkg.in/yaml.v2"
 
 // NewYaml creates a new instance of YAML marshaller.
-func NewYaml() Yaml {
+func NewYaml() Service {
 	return Yaml{}
 }
 

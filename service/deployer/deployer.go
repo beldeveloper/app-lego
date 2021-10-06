@@ -22,8 +22,8 @@ func NewDeployer(
 	os appOs.Service,
 	variables variable.Service,
 	dockerMarshaller marshaller.Service,
-	workDir string,
-) Deployer {
+	workDir model.FilePath,
+) Service {
 	return Deployer{
 		repositories:     repositories,
 		branches:         branches,
@@ -31,7 +31,7 @@ func NewDeployer(
 		os:               os,
 		variables:        variables,
 		dockerMarshaller: dockerMarshaller,
-		workDir:          workDir,
+		workDir:          string(workDir),
 	}
 }
 

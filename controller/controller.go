@@ -2,12 +2,18 @@ package controller
 
 import (
 	"context"
+	"github.com/beldeveloper/app-lego/service/branch"
+	"github.com/beldeveloper/app-lego/service/builder"
+	"github.com/beldeveloper/app-lego/service/deployer"
+	"github.com/beldeveloper/app-lego/service/deployment"
+	"github.com/beldeveloper/app-lego/service/repository"
+	"github.com/beldeveloper/app-lego/service/validation"
+	"github.com/beldeveloper/app-lego/service/vcs"
 	"github.com/beldeveloper/go-errors-context"
 	"log"
 	"time"
 
 	"github.com/beldeveloper/app-lego/model"
-	"github.com/beldeveloper/app-lego/service"
 )
 
 const (
@@ -22,22 +28,44 @@ const (
 )
 
 // NewController creates a new instance of the application controller.
-func NewController(services service.Container) Controller {
-	return Controller{services: services}
+func NewController(
+	repository repository.Service,
+	branch branch.Service,
+	deployment deployment.Service,
+	builder builder.Service,
+	deployer deployer.Service,
+	validation validation.Service,
+	vcs vcs.Service,
+) Service {
+	return Controller{
+		repository: repository,
+		branch:     branch,
+		deployment: deployment,
+		builder:    builder,
+		deployer:   deployer,
+		validation: validation,
+		vcs:        vcs,
+	}
 }
 
 // Controller implements the application controller.
 type Controller struct {
-	services service.Container
+	repository repository.Service
+	branch     branch.Service
+	deployment deployment.Service
+	builder    builder.Service
+	deployer   deployer.Service
+	validation validation.Service
+	vcs        vcs.Service
 }
 
 // AddRepository adds new repository and puts int to pending download status.
 func (c Controller) AddRepository(ctx context.Context, f model.FormAddRepository) (model.Repository, error) {
-	f, err := c.services.Validation.AddRepository(ctx, f)
+	f, err := c.validation.AddRepository(ctx, f)
 	if err != nil {
 		return model.Repository{}, errors.WrapContext(err, errors.Context{Path: "controller.AddRepository: validate"})
 	}
-	r, err := c.services.Repository.Add(ctx, model.Repository{
+	r, err := c.repository.Add(ctx, model.Repository{
 		Type:      f.Type,
 		Alias:     f.Alias,
 		Name:      f.Name,
@@ -53,25 +81,25 @@ func (c Controller) AddRepository(ctx context.Context, f model.FormAddRepository
 
 // Repositories returns the list of repositories.
 func (c Controller) Repositories(ctx context.Context) ([]model.Repository, error) {
-	res, err := c.services.Repository.FindAll(ctx)
+	res, err := c.repository.FindAll(ctx)
 	return res, errors.WrapContext(err, errors.Context{Path: "controller.Repositories: find"})
 }
 
 // Branches returns the list of branches.
 func (c Controller) Branches(ctx context.Context) ([]model.Branch, error) {
-	res, err := c.services.Branches.FindAll(ctx)
+	res, err := c.branch.FindAll(ctx)
 	return res, errors.WrapContext(err, errors.Context{Path: "controller.Branches: find"})
 }
 
 // Deployments returns the list of deployments.
 func (c Controller) Deployments(ctx context.Context) ([]model.Deployment, error) {
-	res, err := c.services.Deployment.FindAll(ctx)
+	res, err := c.deployment.FindAll(ctx)
 	return res, errors.WrapContext(err, errors.Context{Path: "controller.Deployments: find"})
 }
 
 // AddDeployment adds and enqueues new deployment.
 func (c Controller) AddDeployment(ctx context.Context, f model.FormAddDeployment) (model.Deployment, error) {
-	branches, err := c.services.Branches.FindByIDs(ctx, f.Branches)
+	branches, err := c.branch.FindByIDs(ctx, f.Branches)
 	if err != nil {
 		return model.Deployment{}, errors.WrapContext(err, errors.Context{
 			Path:   "controller.AddDeployment: find branches",
@@ -90,7 +118,7 @@ func (c Controller) AddDeployment(ctx context.Context, f model.FormAddDeployment
 			Hash: b.Hash,
 		}
 	}
-	d, err = c.services.Deployment.Add(ctx, d)
+	d, err = c.deployment.Add(ctx, d)
 	if err != nil {
 		return d, errors.WrapContext(err, errors.Context{Path: "controller.AddDeployment: add"})
 	}
@@ -100,7 +128,7 @@ func (c Controller) AddDeployment(ctx context.Context, f model.FormAddDeployment
 
 // RebuildDeployment enqueues the existing deployment for rebuilding.
 func (c Controller) RebuildDeployment(ctx context.Context, id uint64) (model.Deployment, error) {
-	d, err := c.services.Deployment.FindByID(ctx, id)
+	d, err := c.deployment.FindByID(ctx, id)
 	if err != nil {
 		return d, errors.WrapContext(err, errors.Context{
 			Path:   "controller.RebuildDeployment: find",
@@ -108,7 +136,7 @@ func (c Controller) RebuildDeployment(ctx context.Context, id uint64) (model.Dep
 		})
 	}
 	d.Status = model.DeploymentStatusEnqueued
-	d, err = c.services.Deployment.Update(ctx, d)
+	d, err = c.deployment.Update(ctx, d)
 	if err != nil {
 		return d, errors.WrapContext(err, errors.Context{
 			Path:   "controller.RebuildDeployment: update",
@@ -121,7 +149,7 @@ func (c Controller) RebuildDeployment(ctx context.Context, id uint64) (model.Dep
 
 // CloseDeployment closes the existing deployment.
 func (c Controller) CloseDeployment(ctx context.Context, id uint64) error {
-	d, err := c.services.Deployment.FindByID(ctx, id)
+	d, err := c.deployment.FindByID(ctx, id)
 	if err != nil {
 		return errors.WrapContext(err, errors.Context{
 			Path:   "controller.CloseDeployment: find",
@@ -129,7 +157,7 @@ func (c Controller) CloseDeployment(ctx context.Context, id uint64) error {
 		})
 	}
 	d.Status = model.DeploymentStatusClosed
-	d, err = c.services.Deployment.Update(ctx, d)
+	d, err = c.deployment.Update(ctx, d)
 	if err != nil {
 		return errors.WrapContext(err, errors.Context{
 			Path:   "controller.CloseDeployment: update",
@@ -149,7 +177,7 @@ func (c Controller) DownloadRepositoryJob(ctx context.Context) {
 	for {
 		select {
 		case <-t.C:
-			r, err = c.services.Repository.FindPending(ctx)
+			r, err = c.repository.FindPending(ctx)
 			if err != nil {
 				if !errors.Is(err, model.ErrNotFound) {
 					log.Println(errors.WrapContext(err, errors.Context{Path: "controller.DownloadRepositoryJob: find pending"}))
@@ -157,7 +185,7 @@ func (c Controller) DownloadRepositoryJob(ctx context.Context) {
 				break
 			}
 			r.Status = model.RepositoryStatusDownloading
-			r, err = c.services.Repository.Update(ctx, r)
+			r, err = c.repository.Update(ctx, r)
 			if err != nil {
 				log.Println(errors.WrapContext(err, errors.Context{
 					Path:   "controller.DownloadRepositoryJob: pre-update",
@@ -165,7 +193,7 @@ func (c Controller) DownloadRepositoryJob(ctx context.Context) {
 				}))
 				break
 			}
-			err = c.services.VCS.DownloadRepository(ctx, r)
+			err = c.vcs.DownloadRepository(ctx, r)
 			r.Status = model.RepositoryStatusReady
 			if err != nil {
 				r.Status = model.RepositoryStatusFailed
@@ -175,7 +203,7 @@ func (c Controller) DownloadRepositoryJob(ctx context.Context) {
 				}))
 				break
 			}
-			r, err = c.services.Repository.Update(ctx, r)
+			r, err = c.repository.Update(ctx, r)
 			if err != nil {
 				log.Println(errors.WrapContext(err, errors.Context{
 					Path:   "controller.DownloadRepositoryJob: post-update",
@@ -200,14 +228,14 @@ func (c Controller) SyncRepositoryJob(ctx context.Context) {
 	for {
 		select {
 		case <-t.C:
-			r, err = c.services.Repository.FindOutdated(ctx)
+			r, err = c.repository.FindOutdated(ctx)
 			if err != nil {
 				if !errors.Is(err, model.ErrNotFound) {
 					log.Println(errors.WrapContext(err, errors.Context{Path: "controller.SyncRepositoryJob: find outdated"}))
 				}
 				break
 			}
-			branches, err = c.services.VCS.Branches(ctx, r)
+			branches, err = c.vcs.Branches(ctx, r)
 			if err != nil {
 				log.Println(errors.WrapContext(err, errors.Context{
 					Path:   "controller.SyncRepositoryJob: branches",
@@ -215,7 +243,7 @@ func (c Controller) SyncRepositoryJob(ctx context.Context) {
 				}))
 				break
 			}
-			branches, err = c.services.Branches.Sync(ctx, r, branches)
+			branches, err = c.branch.Sync(ctx, r, branches)
 			if err != nil {
 				log.Println(errors.WrapContext(err, errors.Context{
 					Path:   "controller.SyncRepositoryJob: sync",
@@ -224,7 +252,7 @@ func (c Controller) SyncRepositoryJob(ctx context.Context) {
 				break
 			}
 			r.UpdatedAt = time.Now()
-			r, err = c.services.Repository.Update(ctx, r)
+			r, err = c.repository.Update(ctx, r)
 			if err != nil {
 				log.Println(errors.WrapContext(err, errors.Context{
 					Path:   "controller.SyncRepositoryJob: update",
@@ -233,7 +261,7 @@ func (c Controller) SyncRepositoryJob(ctx context.Context) {
 				break
 			}
 			for _, b := range branches {
-				err = c.services.Builder.Enqueue(ctx, b)
+				err = c.builder.Enqueue(ctx, b)
 				if err != nil {
 					log.Println(errors.WrapContext(err, errors.Context{
 						Path:   "controller.SyncRepositoryJob: enqueue",
@@ -258,14 +286,14 @@ func (c Controller) BuildBranchJob(ctx context.Context) {
 	for {
 		select {
 		case <-t.C:
-			b, err = c.services.Branches.FindEnqueued(ctx)
+			b, err = c.branch.FindEnqueued(ctx)
 			if err != nil {
 				if !errors.Is(err, model.ErrNotFound) {
 					log.Println(errors.WrapContext(err, errors.Context{Path: "controller.BuildBranchJob: find enqueued"}))
 				}
 				break
 			}
-			err = c.services.Builder.Build(ctx, b)
+			err = c.builder.Build(ctx, b)
 			if err != nil {
 				switch true {
 				case errors.Is(err, model.ErrBuildCanceled):
@@ -281,7 +309,7 @@ func (c Controller) BuildBranchJob(ctx context.Context) {
 				break
 			}
 			go func(b model.Branch) {
-				err := c.services.Deployer.AutoRebuild(ctx, b)
+				err := c.deployer.AutoRebuild(ctx, b)
 				if err != nil {
 					log.Println(errors.WrapContext(err, errors.Context{
 						Path:   "controller.BuildBranchJob: auto-rebuild",
@@ -303,7 +331,7 @@ func (c Controller) WatchDeploymentsJob(ctx context.Context) {
 	for {
 		select {
 		case <-t.C:
-			err := c.services.Deployer.Run(ctx)
+			err := c.deployer.Run(ctx)
 			if err != nil {
 				log.Println(errors.WrapContext(err, errors.Context{Path: "controller.WatchDeploymentsJob: run"}))
 			}

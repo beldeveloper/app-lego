@@ -10,8 +10,8 @@ import (
 )
 
 // NewPostgres creates a new instance of the repositories service.
-func NewPostgres(conn *pgxpool.Pool, schema string) Postgres {
-	return Postgres{conn: conn, schema: schema}
+func NewPostgres(conn *pgxpool.Pool, schema model.PgSchema) Service {
+	return Postgres{conn: conn, schema: string(schema)}
 }
 
 // Postgres implements the repositories service with the Postgres storage.
