@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/beldeveloper/app-lego/model"
+	"github.com/beldeveloper/go-errors-context"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"strconv"
@@ -25,7 +26,10 @@ type Postgres struct {
 func (p Postgres) Sync(ctx context.Context, r model.Repository, branches []model.Branch) ([]model.Branch, error) {
 	old, err := p.FindByRepository(ctx, r)
 	if err != nil {
-		return nil, fmt.Errorf("service.branch.postgres.Sync: find old: %w", err)
+		return nil, errors.WrapContext(err, errors.Context{
+			Path:   "service.branch.postgres.Sync: find",
+			Params: errors.Params{"repository": r.ID},
+		})
 	}
 	oldMap := make(map[string]model.Branch)
 	for _, b := range old {
@@ -39,7 +43,10 @@ func (p Postgres) Sync(ctx context.Context, r model.Repository, branches []model
 			b.Status = model.BranchStatusPending
 			b, err = p.Add(ctx, b)
 			if err != nil {
-				return nil, fmt.Errorf("service.branch.postgres.Sync: add: %w", err)
+				return nil, errors.WrapContext(err, errors.Context{
+					Path:   "service.branch.postgres.Sync: add",
+					Params: errors.Params{"branchName": b.Name},
+				})
 			}
 			res = append(res, b)
 			continue
@@ -52,7 +59,10 @@ func (p Postgres) Sync(ctx context.Context, r model.Repository, branches []model
 		b.Status = model.BranchStatusPending
 		b, err = p.Update(ctx, b)
 		if err != nil {
-			return nil, fmt.Errorf("service.branch.postgres.Sync: update: %w", err)
+			return nil, errors.WrapContext(err, errors.Context{
+				Path:   "service.branch.postgres.Sync: update",
+				Params: errors.Params{"branch": b.ID},
+			})
 		}
 		res = append(res, b)
 	}
@@ -64,7 +74,10 @@ func (p Postgres) Sync(ctx context.Context, r model.Repository, branches []model
 	}
 	err = p.DeleteByIDs(ctx, del)
 	if err != nil {
-		return nil, fmt.Errorf("service.branch.postgres.Sync: delete: %w", err)
+		return nil, errors.WrapContext(err, errors.Context{
+			Path:   "service.branch.postgres.Sync: delete",
+			Params: errors.Params{"ids": del},
+		})
 	}
 	return res, nil
 }
@@ -77,7 +90,7 @@ func (p Postgres) FindAll(ctx context.Context) ([]model.Branch, error) {
 	)
 	rows, err := p.conn.Query(ctx, q)
 	if err != nil {
-		return nil, fmt.Errorf("service.branch.postgres.FindAll: query: %w", err)
+		return nil, errors.WrapContext(err, errors.Context{Path: "service.branch.postgres.FindAll: query"})
 	}
 	defer rows.Close()
 	res := make([]model.Branch, 0)
@@ -85,7 +98,7 @@ func (p Postgres) FindAll(ctx context.Context) ([]model.Branch, error) {
 	for rows.Next() {
 		err = rows.Scan(&b.ID, &b.RepositoryID, &b.Type, &b.Name, &b.Hash, &b.Status)
 		if err != nil {
-			return nil, fmt.Errorf("service.branch.postgres.FindAll: scan: %w", err)
+			return nil, errors.WrapContext(err, errors.Context{Path: "service.branch.postgres.FindAll: scan"})
 		}
 		res = append(res, b)
 	}
@@ -108,7 +121,10 @@ func (p Postgres) FindByIDs(ctx context.Context, ids []uint64) ([]model.Branch, 
 	)
 	rows, err := p.conn.Query(ctx, q)
 	if err != nil {
-		return nil, fmt.Errorf("service.branch.postgres.FindByIDs: query: %w", err)
+		return nil, errors.WrapContext(err, errors.Context{
+			Path:   "service.branch.postgres.FindByIDs: query",
+			Params: errors.Params{"ids": ids},
+		})
 	}
 	defer rows.Close()
 	res := make([]model.Branch, 0)
@@ -116,7 +132,10 @@ func (p Postgres) FindByIDs(ctx context.Context, ids []uint64) ([]model.Branch, 
 	for rows.Next() {
 		err = rows.Scan(&b.ID, &b.RepositoryID, &b.Type, &b.Name, &b.Hash, &b.Status)
 		if err != nil {
-			return nil, fmt.Errorf("service.branch.postgres.FindByIDs: scan: %w", err)
+			return nil, errors.WrapContext(err, errors.Context{
+				Path:   "service.branch.postgres.FindByIDs: scan",
+				Params: errors.Params{"ids": ids},
+			})
 		}
 		res = append(res, b)
 	}
@@ -131,7 +150,10 @@ func (p Postgres) FindByRepository(ctx context.Context, r model.Repository) ([]m
 	)
 	rows, err := p.conn.Query(ctx, q, r.ID)
 	if err != nil {
-		return nil, fmt.Errorf("service.branch.postgres.FindByRepository: query: %w", err)
+		return nil, errors.WrapContext(err, errors.Context{
+			Path:   "service.branch.postgres.FindByRepository: query",
+			Params: errors.Params{"repository": r.ID},
+		})
 	}
 	defer rows.Close()
 	res := make([]model.Branch, 0)
@@ -139,7 +161,10 @@ func (p Postgres) FindByRepository(ctx context.Context, r model.Repository) ([]m
 	for rows.Next() {
 		err = rows.Scan(&b.ID, &b.RepositoryID, &b.Type, &b.Name, &b.Hash, &b.Status)
 		if err != nil {
-			return nil, fmt.Errorf("service.branch.postgres.FindByRepository: scan: %w", err)
+			return nil, errors.WrapContext(err, errors.Context{
+				Path:   "service.branch.postgres.FindByRepository: scan",
+				Params: errors.Params{"repository": r.ID},
+			})
 		}
 		res = append(res, b)
 	}
@@ -154,13 +179,13 @@ func (p Postgres) FindByID(ctx context.Context, id uint64) (model.Branch, error)
 		p.schema,
 	)
 	err := p.conn.QueryRow(ctx, q, id).Scan(&b.ID, &b.RepositoryID, &b.Type, &b.Name, &b.Hash, &b.Status)
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			return b, model.ErrNotFound
-		}
-		return b, fmt.Errorf("service.branch.postgres.FindByID: query: %w", err)
+	if err == pgx.ErrNoRows {
+		err = model.ErrNotFound
 	}
-	return b, nil
+	return b, errors.WrapContext(err, errors.Context{
+		Path:   "service.branch.postgres.FindByID: scan",
+		Params: errors.Params{"branch": id},
+	})
 }
 
 // FindEnqueued returns the one branch that is enqueued.
@@ -172,13 +197,10 @@ func (p Postgres) FindEnqueued(ctx context.Context) (model.Branch, error) {
 	)
 	err := p.conn.QueryRow(ctx, q, model.BranchStatusEnqueued).
 		Scan(&b.ID, &b.RepositoryID, &b.Type, &b.Name, &b.Hash, &b.Status)
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			return b, model.ErrNotFound
-		}
-		return b, fmt.Errorf("service.branch.postgres.FindEnqueued: query: %w", err)
+	if err == pgx.ErrNoRows {
+		err = model.ErrNotFound
 	}
-	return b, nil
+	return b, errors.WrapContext(err, errors.Context{Path: "service.branch.postgres.FindEnqueued: scan"})
 }
 
 // Add saves a new branch.
@@ -189,20 +211,17 @@ func (p Postgres) Add(ctx context.Context, b model.Branch) (model.Branch, error)
 		p.schema,
 	)
 	err := p.conn.QueryRow(ctx, q, b.RepositoryID, b.Type, b.Name, b.Hash, b.Status).Scan(&b.ID)
-	if err != nil {
-		return b, fmt.Errorf("service.branch.postgres.Add: insert: %w", err)
-	}
-	return b, nil
+	return b, errors.WrapContext(err, errors.Context{Path: "service.branch.postgres.Add: scan"})
 }
 
 // Update modifies a specific branch.
 func (p Postgres) Update(ctx context.Context, b model.Branch) (model.Branch, error) {
 	q := fmt.Sprintf(`UPDATE "%s"."branches" SET "hash" = $2, "status" = $3 WHERE "id" = $1`, p.schema)
 	_, err := p.conn.Exec(ctx, q, b.ID, b.Hash, b.Status)
-	if err != nil {
-		return b, fmt.Errorf("service.branch.postgres.Update: exec: %w", err)
-	}
-	return b, nil
+	return b, errors.WrapContext(err, errors.Context{
+		Path:   "service.branch.postgres.Update: exec",
+		Params: errors.Params{"branch": b.ID, "status": b.Status, "hash": b.Hash},
+	})
 }
 
 // DeleteByIDs deletes all branches with the specific ids.
@@ -216,20 +235,20 @@ func (p Postgres) DeleteByIDs(ctx context.Context, ids []uint64) error {
 	}
 	q := fmt.Sprintf(`DELETE FROM "%s"."branches" WHERE "id" IN (%s)`, p.schema, strings.Join(idsStr, ","))
 	_, err := p.conn.Exec(ctx, q)
-	if err != nil {
-		return fmt.Errorf("service.branch.postgres.DeleteByIDs: exec: %w", err)
-	}
-	return nil
+	return errors.WrapContext(err, errors.Context{
+		Path:   "service.branch.postgres.DeleteByIDs: exec",
+		Params: errors.Params{"ids": ids},
+	})
 }
 
 // UpdateStatus modifies the branch status.
 func (p Postgres) UpdateStatus(ctx context.Context, b model.Branch) error {
 	q := fmt.Sprintf(`UPDATE "%s"."branches" SET "status" = $2 WHERE "id" = $1`, p.schema)
 	_, err := p.conn.Exec(ctx, q, b.ID, b.Status)
-	if err != nil {
-		return fmt.Errorf("service.branch.postgres.UpdateStatus: exec: %w", err)
-	}
-	return nil
+	return errors.WrapContext(err, errors.Context{
+		Path:   "service.branch.postgres.UpdateStatus: exec",
+		Params: errors.Params{"branch": b.ID, "status": b.Status},
+	})
 }
 
 // LoadComposeData reads the composing configuration for the specific branch.
@@ -237,21 +256,21 @@ func (p Postgres) LoadComposeData(ctx context.Context, b model.Branch) ([]byte, 
 	var data []byte
 	q := fmt.Sprintf(`SELECT "compose" FROM "%s"."branches" WHERE "id" = $1`, p.schema)
 	err := p.conn.QueryRow(ctx, q, b.ID).Scan(&data)
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			return data, model.ErrNotFound
-		}
-		return data, fmt.Errorf("service.branch.postgres.LoadDockerCompose: query: %w", err)
+	if err == pgx.ErrNoRows {
+		err = model.ErrNotFound
 	}
-	return data, nil
+	return data, errors.WrapContext(err, errors.Context{
+		Path:   "service.branch.postgres.LoadComposeData: scan",
+		Params: errors.Params{"branch": b.ID},
+	})
 }
 
 // SaveComposeData saves the composing configuration for the specific branch.
 func (p Postgres) SaveComposeData(ctx context.Context, b model.Branch, data []byte) error {
 	q := fmt.Sprintf(`UPDATE "%s"."branches" SET "compose" = $2 WHERE "id" = $1`, p.schema)
 	_, err := p.conn.Exec(ctx, q, b.ID, data)
-	if err != nil {
-		return fmt.Errorf("service.branch.postgres.SaveComposeData: exec: %w", err)
-	}
-	return nil
+	return errors.WrapContext(err, errors.Context{
+		Path:   "service.branch.postgres.SaveComposeData: exec",
+		Params: errors.Params{"branch": b.ID},
+	})
 }

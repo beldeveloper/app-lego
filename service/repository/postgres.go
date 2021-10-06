@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/beldeveloper/app-lego/model"
+	"github.com/beldeveloper/go-errors-context"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 )
@@ -27,7 +28,7 @@ func (p Postgres) FindAll(ctx context.Context) ([]model.Repository, error) {
 	)
 	rows, err := p.conn.Query(ctx, q)
 	if err != nil {
-		return nil, fmt.Errorf("service.repository.postgres.FindAll: query: %w", err)
+		return nil, errors.WrapContext(err, errors.Context{Path: "service.repository.postgres.FindAll: query"})
 	}
 	defer rows.Close()
 	res := make([]model.Repository, 0)
@@ -35,7 +36,7 @@ func (p Postgres) FindAll(ctx context.Context) ([]model.Repository, error) {
 	for rows.Next() {
 		err = rows.Scan(&r.ID, &r.Type, &r.Alias, &r.Name, &r.Status, &r.UpdatedAt)
 		if err != nil {
-			return nil, fmt.Errorf("service.repository.postgres.FindAll: scan: %w", err)
+			return nil, errors.WrapContext(err, errors.Context{Path: "service.repository.postgres.FindAll: scan"})
 		}
 		res = append(res, r)
 	}
@@ -50,13 +51,13 @@ func (p Postgres) FindByID(ctx context.Context, id uint64) (model.Repository, er
 		p.schema,
 	)
 	err := p.conn.QueryRow(ctx, q, id).Scan(&r.ID, &r.Type, &r.Alias, &r.Name, &r.Status, &r.UpdatedAt)
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			return r, model.ErrNotFound
-		}
-		return r, fmt.Errorf("service.repository.postgres.FindByID: scan: %w; id = %d", err, id)
+	if err == pgx.ErrNoRows {
+		err = model.ErrNotFound
 	}
-	return r, nil
+	return r, errors.WrapContext(err, errors.Context{
+		Path:   "service.repository.postgres.FindByID: scan",
+		Params: errors.Params{"repository": id},
+	})
 }
 
 // FindPending returns a repository that is awaiting to be downloaded,
@@ -69,13 +70,10 @@ func (p Postgres) FindPending(ctx context.Context) (model.Repository, error) {
 	)
 	err := p.conn.QueryRow(ctx, q, model.RepositoryStatusPending).
 		Scan(&r.ID, &r.Type, &r.Alias, &r.Name, &r.Status, &r.UpdatedAt)
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			return r, model.ErrNotFound
-		}
-		return r, fmt.Errorf("service.repository.postgres.FindPending: scan: %w", err)
+	if err == pgx.ErrNoRows {
+		return r, model.ErrNotFound
 	}
-	return r, nil
+	return r, errors.WrapContext(err, errors.Context{Path: "service.repository.postgres.FindPending: scan"})
 }
 
 // FindOutdated return the repository that is ready for pulling updates longer that others.
@@ -88,13 +86,10 @@ func (p Postgres) FindOutdated(ctx context.Context) (model.Repository, error) {
 	)
 	err := p.conn.QueryRow(ctx, q, model.RepositoryStatusReady).
 		Scan(&r.ID, &r.Type, &r.Alias, &r.Name, &r.Status, &r.UpdatedAt)
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			return r, model.ErrNotFound
-		}
-		return r, fmt.Errorf("service.repository.postgres.FindOutdated: scan: %w", err)
+	if err == pgx.ErrNoRows {
+		return r, model.ErrNotFound
 	}
-	return r, nil
+	return r, errors.WrapContext(err, errors.Context{Path: "service.repository.postgres.FindOutdated: scan"})
 }
 
 // Add saves a new repository.
@@ -105,20 +100,17 @@ func (p Postgres) Add(ctx context.Context, r model.Repository) (model.Repository
 		p.schema,
 	)
 	err := p.conn.QueryRow(ctx, q, r.Type, r.Alias, r.Name, r.Status, r.UpdatedAt).Scan(&r.ID)
-	if err != nil {
-		return r, fmt.Errorf("service.repository.postgres.Add: insert: %w", err)
-	}
-	return r, nil
+	return r, errors.WrapContext(err, errors.Context{Path: "service.repository.postgres.Add: scan"})
 }
 
 // Update modifies a specific repository.
 func (p Postgres) Update(ctx context.Context, r model.Repository) (model.Repository, error) {
 	q := fmt.Sprintf(`UPDATE "%s"."repositories" SET "updated_at" = $2, "status" = $3 WHERE "id" = $1`, p.schema)
 	_, err := p.conn.Exec(ctx, q, r.ID, r.UpdatedAt, r.Status)
-	if err != nil {
-		return r, fmt.Errorf("service.repository.postgres.Update: exec: %w", err)
-	}
-	return r, nil
+	return r, errors.WrapContext(err, errors.Context{
+		Path:   "service.repository.postgres.Update: exec",
+		Params: errors.Params{"repository": r.ID, "status": r.Status},
+	})
 }
 
 // LoadSecrets reads the secret variables for the specific repository.
@@ -128,9 +120,12 @@ func (p Postgres) LoadSecrets(ctx context.Context, r model.Repository) ([]model.
 	err := p.conn.QueryRow(ctx, q, r.ID).Scan(&res)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, model.ErrNotFound
+			err = model.ErrNotFound
 		}
-		return nil, fmt.Errorf("service.repository.postgres.LoadSecrets: query: %w", err)
+		return nil, errors.WrapContext(err, errors.Context{
+			Path:   "service.repository.postgres.LoadSecrets: scan",
+			Params: errors.Params{"repository": r.ID},
+		})
 	}
 	for i := range res {
 		res[i].Type = model.VariableTypeSecret
@@ -143,7 +138,10 @@ func (p Postgres) SaveSecrets(ctx context.Context, r model.Repository, secrets [
 	q := fmt.Sprintf(`UPDATE "%s"."repositories" SET "secrets" = $2 WHERE "id" = $1`, p.schema)
 	_, err := p.conn.Exec(ctx, q, r.ID, secrets)
 	if err != nil {
-		return fmt.Errorf("service.repository.postgres.SaveSecrets: exec: %w", err)
+		return errors.WrapContext(err, errors.Context{
+			Path:   "service.repository.postgres.SaveSecrets: exec",
+			Params: errors.Params{"repository": r.ID},
+		})
 	}
 	return nil
 }

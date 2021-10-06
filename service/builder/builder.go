@@ -2,8 +2,6 @@ package builder
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"github.com/beldeveloper/app-lego/model"
 	"github.com/beldeveloper/app-lego/service/branch"
 	"github.com/beldeveloper/app-lego/service/marshaller"
@@ -11,6 +9,7 @@ import (
 	"github.com/beldeveloper/app-lego/service/repository"
 	"github.com/beldeveloper/app-lego/service/variable"
 	"github.com/beldeveloper/app-lego/service/vcs"
+	"github.com/beldeveloper/go-errors-context"
 	"log"
 	"strings"
 	"sync"
@@ -57,7 +56,10 @@ func (b Builder) Enqueue(ctx context.Context, branch model.Branch) error {
 	branch.Status = model.BranchStatusEnqueued
 	err := b.updateBranchStatus(ctx, branch)
 	if err != nil {
-		return err
+		return errors.WrapContext(err, errors.Context{
+			Path:   "service.builder.Enqueue",
+			Params: errors.Params{"branch": branch.ID, "status": branch.Status},
+		})
 	}
 	b.toggleQueue(branch.ID, true)
 	return nil
@@ -68,7 +70,10 @@ func (b Builder) Build(ctx context.Context, branch model.Branch) error {
 	branch.Status = model.BranchStatusBuilding
 	err := b.updateBranchStatus(ctx, branch)
 	if err != nil {
-		return err
+		return errors.WrapContext(err, errors.Context{
+			Path:   "service.builder.Build: update status",
+			Params: errors.Params{"branch": branch.ID, "status": branch.Status},
+		})
 	}
 	b.toggleQueue(branch.ID, false)
 	step := b.prepareSteps(ctx, branch)
@@ -82,17 +87,18 @@ func (b Builder) Build(ctx context.Context, branch model.Branch) error {
 				branch.Status = model.BranchStatusSkipped
 			} else {
 				branch.Status = model.BranchStatusFailed
-				err = fmt.Errorf(
-					"service.builder.Build: coudn't execute step: %w; branch ID = %d; step = %s",
-					err,
-					branch.ID,
-					step.name,
-				)
+				err = errors.WrapContext(err, errors.Context{
+					Path:   "service.builder.Build: update status",
+					Params: errors.Params{"branch": branch.ID, "step": step.name},
+				})
 			}
 			go func() {
 				err := b.updateBranchStatus(ctx, branch)
 				if err != nil {
-					log.Println(err)
+					log.Println(errors.WrapContext(err, errors.Context{
+						Path:   "service.builder.Build: update status",
+						Params: errors.Params{"branch": branch.ID, "status": branch.Status},
+					}))
 				}
 			}()
 			return err
@@ -100,7 +106,11 @@ func (b Builder) Build(ctx context.Context, branch model.Branch) error {
 		step = step.next
 	}
 	branch.Status = model.BranchStatusReady
-	return b.updateBranchStatus(ctx, branch)
+	err = b.updateBranchStatus(ctx, branch)
+	return errors.WrapContext(err, errors.Context{
+		Path:   "service.builder.Build: update status",
+		Params: errors.Params{"branch": branch.ID, "status": branch.Status},
+	})
 }
 
 func (b Builder) toggleQueue(bID uint64, state bool) {
@@ -120,12 +130,10 @@ func (b Builder) updateBranchStatus(ctx context.Context, branch model.Branch) er
 	defer b.mux.Unlock()
 	err := b.branches.UpdateStatus(ctx, branch)
 	if err != nil {
-		return fmt.Errorf(
-			"service.builder.setBranchStatus: coudn't set branch status to %s: %w; branch ID = %d\n",
-			branch.Status,
-			err,
-			branch.ID,
-		)
+		return errors.WrapContext(err, errors.Context{
+			Path:   "service.builder.updateBranchStatus",
+			Params: errors.Params{"branch": branch.ID, "status": branch.Status},
+		})
 	}
 	return nil
 }
@@ -138,14 +146,21 @@ func (b Builder) prepareSteps(ctx context.Context, branch model.Branch) *buildin
 		name: "find repository",
 		action: func() (err error) {
 			r, err = b.repositories.FindByID(ctx, branch.RepositoryID)
-			return err
+			return errors.WrapContext(err, errors.Context{
+				Path:   "service.builder.prepareSteps.fetchRepositoryStep",
+				Params: errors.Params{"repository": branch.RepositoryID},
+			})
 		},
 	}
 
 	switchBranchStep := buildingStep{
 		name: "switch branch",
 		action: func() error {
-			return b.vcs.SwitchBranch(ctx, r, branch)
+			err := b.vcs.SwitchBranch(ctx, r, branch)
+			return errors.WrapContext(err, errors.Context{
+				Path:   "service.builder.prepareSteps.switchBranchStep",
+				Params: errors.Params{"branch": branch.ID},
+			})
 		},
 	}
 
@@ -156,16 +171,23 @@ func (b Builder) prepareSteps(ctx context.Context, branch model.Branch) *buildin
 		action: func() error {
 			data, err := b.dockerMarshaller.Marshal(cfg.Compose)
 			if err != nil {
-				return err
+				return errors.WrapContext(err, errors.Context{Path: "service.builder.prepareSteps.finishStep: marshal"})
 			}
-			return b.branches.SaveComposeData(ctx, branch, data)
+			err = b.branches.SaveComposeData(ctx, branch, data)
+			return errors.WrapContext(err, errors.Context{
+				Path:   "service.builder.prepareSteps.finishStep: save compose data",
+				Params: errors.Params{"branch": branch.ID},
+			})
 		},
 	}
 
 	readConfigurationStep.action = func() (err error) {
 		cfg, err = b.vcs.ReadConfiguration(ctx, r, branch)
 		if err != nil {
-			return err
+			return errors.WrapContext(err, errors.Context{
+				Path:   "service.builder.prepareSteps.readConfigurationStep: read configuration",
+				Params: errors.Params{"branch": branch.ID},
+			})
 		}
 		currStep := &readConfigurationStep
 		for _, cmd := range cfg.Commands() {
@@ -180,7 +202,10 @@ func (b Builder) prepareSteps(ctx context.Context, branch model.Branch) *buildin
 				name: "command: " + cmd.Name + " " + strings.Join(cmd.Args, " "),
 				action: func() error {
 					_, err := b.os.RunCmd(ctx, cmd)
-					return err
+					return errors.WrapContext(err, errors.Context{
+						Path:   "service.builder.prepareSteps.cmd",
+						Params: errors.Params{"cmd": cmd.Name, "args": cmd.Args, "env": cmd.Env, "dir": cmd.Dir},
+					})
 				},
 				next: &finishStep,
 			}

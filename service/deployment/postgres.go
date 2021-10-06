@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/beldeveloper/app-lego/model"
+	"github.com/beldeveloper/go-errors-context"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 )
@@ -27,7 +28,7 @@ func (p Postgres) FindAll(ctx context.Context) ([]model.Deployment, error) {
 	)
 	rows, err := p.conn.Query(ctx, q)
 	if err != nil {
-		return nil, fmt.Errorf("service.deployment.postgres.FindAll: query: %w", err)
+		return nil, errors.WrapContext(err, errors.Context{Path: "service.deployment.postgres.FindAll: query"})
 	}
 	defer rows.Close()
 	res := make([]model.Deployment, 0)
@@ -36,7 +37,7 @@ func (p Postgres) FindAll(ctx context.Context) ([]model.Deployment, error) {
 		d.Branches = nil
 		err = rows.Scan(&d.ID, &d.Status, &d.CreatedAt, &d.AutoRebuild, &d.Branches)
 		if err != nil {
-			return nil, fmt.Errorf("service.deployment.postgres.FindAll: scan: %w", err)
+			return nil, errors.WrapContext(err, errors.Context{Path: "service.deployment.postgres.FindAll: scan"})
 		}
 		res = append(res, d)
 	}
@@ -55,7 +56,10 @@ func (p Postgres) FindForAutoRebuild(ctx context.Context, b model.Branch) ([]mod
 	)
 	rows, err := p.conn.Query(ctx, q, b.ID, model.DeploymentStatusReady)
 	if err != nil {
-		return nil, fmt.Errorf("service.deployment.postgres.FindForAutoRebuild: query: %w", err)
+		return nil, errors.WrapContext(err, errors.Context{
+			Path:   "service.deployment.postgres.FindForAutoRebuild: query",
+			Params: errors.Params{"branch": b.ID},
+		})
 	}
 	defer rows.Close()
 	res := make([]model.Deployment, 0)
@@ -64,7 +68,10 @@ func (p Postgres) FindForAutoRebuild(ctx context.Context, b model.Branch) ([]mod
 		d.Branches = nil
 		err = rows.Scan(&d.ID, &d.Status, &d.CreatedAt, &d.AutoRebuild, &d.Branches)
 		if err != nil {
-			return nil, fmt.Errorf("service.deployment.postgres.FindForAutoRebuild: scan: %w", err)
+			return nil, errors.WrapContext(err, errors.Context{
+				Path:   "service.deployment.postgres.FindForAutoRebuild: scan",
+				Params: errors.Params{"branch": b.ID},
+			})
 		}
 		res = append(res, d)
 	}
@@ -79,13 +86,13 @@ func (p Postgres) FindByID(ctx context.Context, id uint64) (model.Deployment, er
 		p.schema,
 	)
 	err := p.conn.QueryRow(ctx, q, id).Scan(&d.ID, &d.Status, &d.CreatedAt, &d.AutoRebuild, &d.Branches)
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			return d, model.ErrNotFound
-		}
-		return d, fmt.Errorf("service.deployment.postgres.FindByID: query: %w", err)
+	if err == pgx.ErrNoRows {
+		err = model.ErrNotFound
 	}
-	return d, nil
+	return d, errors.WrapContext(err, errors.Context{
+		Path:   "service.deployment.postgres.FindByID: scan",
+		Params: errors.Params{"deployment": id},
+	})
 }
 
 // Add saves a new deployment.
@@ -96,18 +103,15 @@ func (p Postgres) Add(ctx context.Context, d model.Deployment) (model.Deployment
 		p.schema,
 	)
 	err := p.conn.QueryRow(ctx, q, d.Status, d.CreatedAt, d.AutoRebuild, d.Branches).Scan(&d.ID)
-	if err != nil {
-		return d, fmt.Errorf("service.deployment.postgres.Add: insert: %w", err)
-	}
-	return d, nil
+	return d, errors.WrapContext(err, errors.Context{Path: "service.deployment.postgres.Add: scan"})
 }
 
 // Update modifies a specific deployment.
 func (p Postgres) Update(ctx context.Context, d model.Deployment) (model.Deployment, error) {
 	q := fmt.Sprintf(`UPDATE "%s"."deployments" SET "status" = $2, "branches" = $3 WHERE "id" = $1`, p.schema)
 	_, err := p.conn.Exec(ctx, q, d.ID, d.Status, d.Branches)
-	if err != nil {
-		return d, fmt.Errorf("service.deployment.postgres.Update: exec: %w", err)
-	}
-	return d, nil
+	return d, errors.WrapContext(err, errors.Context{
+		Path:   "service.deployment.postgres.Update: exec",
+		Params: errors.Params{"deployment": d.ID},
+	})
 }

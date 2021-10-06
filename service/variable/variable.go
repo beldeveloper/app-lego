@@ -3,10 +3,10 @@ package variable
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"github.com/beldeveloper/app-lego/model"
 	"github.com/beldeveloper/app-lego/service/marshaller"
 	"github.com/beldeveloper/app-lego/service/repository"
+	"github.com/beldeveloper/go-errors-context"
 	"strconv"
 	"strings"
 )
@@ -72,7 +72,7 @@ func (s Variable) ListCustom(ctx context.Context, data []byte) ([]model.Variable
 	}
 	err := s.marshaller.Unmarshal(data, &cfg)
 	if err != nil {
-		return nil, fmt.Errorf("service.variable.ReadCustom: unmarshal: %w", err)
+		return nil, errors.WrapContext(err, errors.Context{Path: "service.variable.ListCustom: unmarshal"})
 	}
 	list := make([]model.Variable, len(cfg.Variables))
 	for i, v := range cfg.Variables {
@@ -92,7 +92,10 @@ func (s Variable) ListCustom(ctx context.Context, data []byte) ([]model.Variable
 func (s Variable) ListForRepository(ctx context.Context, r model.Repository) ([]model.Variable, error) {
 	secrets, err := s.repository.LoadSecrets(ctx, r)
 	if err != nil {
-		return nil, err
+		return nil, errors.WrapContext(err, errors.Context{
+			Path:   "service.variable.ListForRepository: LoadSecrets",
+			Params: errors.Params{"repository": r.ID},
+		})
 	}
 	variables := []model.Variable{
 		{

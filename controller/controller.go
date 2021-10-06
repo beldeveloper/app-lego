@@ -2,8 +2,7 @@ package controller
 
 import (
 	"context"
-	"errors"
-	"fmt"
+	"github.com/beldeveloper/go-errors-context"
 	"log"
 	"time"
 
@@ -36,10 +35,7 @@ type Controller struct {
 func (c Controller) AddRepository(ctx context.Context, f model.FormAddRepository) (model.Repository, error) {
 	f, err := c.services.Validation.AddRepository(ctx, f)
 	if err != nil {
-		if errors.Is(err, model.ErrBadInput) {
-			return model.Repository{}, err
-		}
-		return model.Repository{}, fmt.Errorf("controller.AddRepository: error during validation: %w", err)
+		return model.Repository{}, errors.WrapContext(err, errors.Context{Path: "controller.AddRepository: validate"})
 	}
 	r, err := c.services.Repository.Add(ctx, model.Repository{
 		Type:      f.Type,
@@ -49,7 +45,7 @@ func (c Controller) AddRepository(ctx context.Context, f model.FormAddRepository
 		UpdatedAt: time.Now(),
 	})
 	if err != nil {
-		return r, fmt.Errorf("controller.AddRepository: coudn't add the repository: %w", err)
+		return r, errors.WrapContext(err, errors.Context{Path: "controller.AddRepository: add"})
 	}
 	log.Printf("The repository #%d is added\n", r.ID)
 	return r, nil
@@ -57,24 +53,30 @@ func (c Controller) AddRepository(ctx context.Context, f model.FormAddRepository
 
 // Repositories returns the list of repositories.
 func (c Controller) Repositories(ctx context.Context) ([]model.Repository, error) {
-	return c.services.Repository.FindAll(ctx)
+	res, err := c.services.Repository.FindAll(ctx)
+	return res, errors.WrapContext(err, errors.Context{Path: "controller.Repositories: find"})
 }
 
 // Branches returns the list of branches.
 func (c Controller) Branches(ctx context.Context) ([]model.Branch, error) {
-	return c.services.Branches.FindAll(ctx)
+	res, err := c.services.Branches.FindAll(ctx)
+	return res, errors.WrapContext(err, errors.Context{Path: "controller.Branches: find"})
 }
 
 // Deployments returns the list of deployments.
 func (c Controller) Deployments(ctx context.Context) ([]model.Deployment, error) {
-	return c.services.Deployment.FindAll(ctx)
+	res, err := c.services.Deployment.FindAll(ctx)
+	return res, errors.WrapContext(err, errors.Context{Path: "controller.Deployments: find"})
 }
 
 // AddDeployment adds and enqueues new deployment.
 func (c Controller) AddDeployment(ctx context.Context, f model.FormAddDeployment) (model.Deployment, error) {
 	branches, err := c.services.Branches.FindByIDs(ctx, f.Branches)
 	if err != nil {
-		return model.Deployment{}, fmt.Errorf("controller.AddDeployment: find branches: %w", err)
+		return model.Deployment{}, errors.WrapContext(err, errors.Context{
+			Path:   "controller.AddDeployment: find branches",
+			Params: errors.Params{"branches": f.Branches},
+		})
 	}
 	d := model.Deployment{
 		Status:      model.DeploymentStatusEnqueued,
@@ -90,7 +92,7 @@ func (c Controller) AddDeployment(ctx context.Context, f model.FormAddDeployment
 	}
 	d, err = c.services.Deployment.Add(ctx, d)
 	if err != nil {
-		return d, fmt.Errorf("controller.AddDeployment: add: %w", err)
+		return d, errors.WrapContext(err, errors.Context{Path: "controller.AddDeployment: add"})
 	}
 	log.Printf("The deployment #%d is requested\n", d.ID)
 	return d, nil
@@ -100,12 +102,18 @@ func (c Controller) AddDeployment(ctx context.Context, f model.FormAddDeployment
 func (c Controller) RebuildDeployment(ctx context.Context, id uint64) (model.Deployment, error) {
 	d, err := c.services.Deployment.FindByID(ctx, id)
 	if err != nil {
-		return d, fmt.Errorf("controller.RebuildDeployment: find by id: %w", err)
+		return d, errors.WrapContext(err, errors.Context{
+			Path:   "controller.RebuildDeployment: find",
+			Params: errors.Params{"deployment": id},
+		})
 	}
 	d.Status = model.DeploymentStatusEnqueued
 	d, err = c.services.Deployment.Update(ctx, d)
 	if err != nil {
-		return d, fmt.Errorf("controller.RebuildDeployment: update: %w", err)
+		return d, errors.WrapContext(err, errors.Context{
+			Path:   "controller.RebuildDeployment: update",
+			Params: errors.Params{"deployment": id},
+		})
 	}
 	log.Printf("The deployment #%d is enqueued for rebuilding\n", d.ID)
 	return d, nil
@@ -115,12 +123,18 @@ func (c Controller) RebuildDeployment(ctx context.Context, id uint64) (model.Dep
 func (c Controller) CloseDeployment(ctx context.Context, id uint64) error {
 	d, err := c.services.Deployment.FindByID(ctx, id)
 	if err != nil {
-		return fmt.Errorf("controller.DeleteDeployment: find by id: %w", err)
+		return errors.WrapContext(err, errors.Context{
+			Path:   "controller.CloseDeployment: find",
+			Params: errors.Params{"deployment": id},
+		})
 	}
 	d.Status = model.DeploymentStatusClosed
 	d, err = c.services.Deployment.Update(ctx, d)
 	if err != nil {
-		return fmt.Errorf("controller.DeleteDeployment: update: %w", err)
+		return errors.WrapContext(err, errors.Context{
+			Path:   "controller.CloseDeployment: update",
+			Params: errors.Params{"deployment": id},
+		})
 	}
 	log.Printf("The deployment #%d is closed\n", d.ID)
 	return nil
@@ -138,26 +152,35 @@ func (c Controller) DownloadRepositoryJob(ctx context.Context) {
 			r, err = c.services.Repository.FindPending(ctx)
 			if err != nil {
 				if !errors.Is(err, model.ErrNotFound) {
-					log.Printf("controller.DownloadRepositoryJob: coudn't fetch the pending repository: %v\n", err)
+					log.Println(errors.WrapContext(err, errors.Context{Path: "controller.DownloadRepositoryJob: find pending"}))
 				}
 				break
 			}
 			r.Status = model.RepositoryStatusDownloading
 			r, err = c.services.Repository.Update(ctx, r)
 			if err != nil {
-				log.Printf("controller.DownloadRepositoryJob: coudn't update repository status: %v; status = %s\n", err, r.Status)
+				log.Println(errors.WrapContext(err, errors.Context{
+					Path:   "controller.DownloadRepositoryJob: pre-update",
+					Params: errors.Params{"repository": r.ID, "status": r.Status},
+				}))
 				break
 			}
 			err = c.services.VCS.DownloadRepository(ctx, r)
 			r.Status = model.RepositoryStatusReady
 			if err != nil {
 				r.Status = model.RepositoryStatusFailed
-				log.Printf("controller.DownloadRepositoryJob: coudn't add the repository: %v; ID = %d\n", err, r.ID)
+				log.Println(errors.WrapContext(err, errors.Context{
+					Path:   "controller.DownloadRepositoryJob: download",
+					Params: errors.Params{"repository": r.ID},
+				}))
 				break
 			}
 			r, err = c.services.Repository.Update(ctx, r)
 			if err != nil {
-				log.Printf("controller.DownloadRepositoryJob: coudn't update repository status: %v; status = %s\n", err, r.Status)
+				log.Println(errors.WrapContext(err, errors.Context{
+					Path:   "controller.DownloadRepositoryJob: post-update",
+					Params: errors.Params{"repository": r.ID, "status": r.Status},
+				}))
 				break
 			}
 			log.Printf("The repository #%d is downloaded\n", r.ID)
@@ -180,30 +203,42 @@ func (c Controller) SyncRepositoryJob(ctx context.Context) {
 			r, err = c.services.Repository.FindOutdated(ctx)
 			if err != nil {
 				if !errors.Is(err, model.ErrNotFound) {
-					log.Printf("controller.SyncRepositoryJob: coudn't fetch the outdated repository: %v\n", err)
+					log.Println(errors.WrapContext(err, errors.Context{Path: "controller.SyncRepositoryJob: find outdated"}))
 				}
 				break
 			}
 			branches, err = c.services.VCS.Branches(ctx, r)
 			if err != nil {
-				log.Printf("controller.SyncRepositoryJob: coudn't get branches from VCS: %v; repository ID = %d\n", err, r.ID)
+				log.Println(errors.WrapContext(err, errors.Context{
+					Path:   "controller.SyncRepositoryJob: branches",
+					Params: errors.Params{"repository": r.ID},
+				}))
 				break
 			}
 			branches, err = c.services.Branches.Sync(ctx, r, branches)
 			if err != nil {
-				log.Printf("controller.SyncRepositoryJob: coudn't sync branches: %v; repository ID = %d\n", err, r.ID)
+				log.Println(errors.WrapContext(err, errors.Context{
+					Path:   "controller.SyncRepositoryJob: sync",
+					Params: errors.Params{"repository": r.ID},
+				}))
 				break
 			}
 			r.UpdatedAt = time.Now()
 			r, err = c.services.Repository.Update(ctx, r)
 			if err != nil {
-				log.Printf("controller.SyncRepositoryJob: coudn't touch the repository: %v; repository ID = %d\n", err, r.ID)
+				log.Println(errors.WrapContext(err, errors.Context{
+					Path:   "controller.SyncRepositoryJob: update",
+					Params: errors.Params{"repository": r.ID},
+				}))
 				break
 			}
 			for _, b := range branches {
 				err = c.services.Builder.Enqueue(ctx, b)
 				if err != nil {
-					log.Printf("controller.SyncRepositoryJob: coudn't enqueue branch: %v; branch ID = %d\n", err, b.ID)
+					log.Println(errors.WrapContext(err, errors.Context{
+						Path:   "controller.SyncRepositoryJob: enqueue",
+						Params: errors.Params{"branch": b.ID},
+					}))
 					continue
 				}
 				log.Printf("The branch #%d is enqueued\n", b.ID)
@@ -226,7 +261,7 @@ func (c Controller) BuildBranchJob(ctx context.Context) {
 			b, err = c.services.Branches.FindEnqueued(ctx)
 			if err != nil {
 				if !errors.Is(err, model.ErrNotFound) {
-					log.Printf("controller.BuildBranchJob: coudn't fetch the enqueued branch: %v\n", err)
+					log.Println(errors.WrapContext(err, errors.Context{Path: "controller.BuildBranchJob: find enqueued"}))
 				}
 				break
 			}
@@ -238,14 +273,20 @@ func (c Controller) BuildBranchJob(ctx context.Context) {
 				case errors.Is(err, model.ErrConfigurationNotFound):
 					log.Printf("The branch #%d building is skipped due to the configuration absence\n", b.ID)
 				default:
-					log.Printf("controller.BuildBranchJob: coudn't build the branch: %v; branch ID = %d\n", err, b.ID)
+					log.Println(errors.WrapContext(err, errors.Context{
+						Path:   "controller.BuildBranchJob: build",
+						Params: errors.Params{"branch": b.ID},
+					}))
 				}
 				break
 			}
 			go func(b model.Branch) {
 				err := c.services.Deployer.AutoRebuild(ctx, b)
 				if err != nil {
-					log.Println(err)
+					log.Println(errors.WrapContext(err, errors.Context{
+						Path:   "controller.BuildBranchJob: auto-rebuild",
+						Params: errors.Params{"branch": b.ID},
+					}))
 				}
 			}(b)
 			log.Printf("The branch #%d is built\n", b.ID)
@@ -264,7 +305,7 @@ func (c Controller) WatchDeploymentsJob(ctx context.Context) {
 		case <-t.C:
 			err := c.services.Deployer.Run(ctx)
 			if err != nil {
-				log.Printf("controller.WatchDeploymentsJob: run deployer: %v\n", err)
+				log.Println(errors.WrapContext(err, errors.Context{Path: "controller.WatchDeploymentsJob: run"}))
 			}
 		case <-ctx.Done():
 			return

@@ -2,7 +2,6 @@ package deployer
 
 import (
 	"context"
-	"fmt"
 	"github.com/beldeveloper/app-lego/model"
 	"github.com/beldeveloper/app-lego/service/branch"
 	"github.com/beldeveloper/app-lego/service/deployment"
@@ -10,6 +9,7 @@ import (
 	appOs "github.com/beldeveloper/app-lego/service/os"
 	"github.com/beldeveloper/app-lego/service/repository"
 	"github.com/beldeveloper/app-lego/service/variable"
+	"github.com/beldeveloper/go-errors-context"
 	"log"
 	"os"
 )
@@ -50,11 +50,11 @@ type Deployer struct {
 func (s Deployer) Run(ctx context.Context) error {
 	deployments, err := s.deployments.FindAll(ctx)
 	if err != nil {
-		return fmt.Errorf("service.deployer.Run: find deployments: %w", err)
+		return errors.WrapContext(err, errors.Context{Path: "service.deployer.Run: find repositories"})
 	}
 	branches, err := s.branches.FindAll(ctx)
 	if err != nil {
-		return fmt.Errorf("service.deployer.Run: find branches: %w", err)
+		return errors.WrapContext(err, errors.Context{Path: "service.deployer.Run: find branches"})
 	}
 	branchesMap := make(map[uint64]model.Branch)
 	for _, b := range branches {
@@ -67,14 +67,20 @@ func (s Deployer) Run(ctx context.Context) error {
 		case model.DeploymentStatusReady, model.DeploymentStatusEnqueued:
 			err = s.prepare(ctx, &d, branchesMap, &dockerCompose)
 			if err != nil {
-				log.Println(err)
+				log.Println(errors.WrapContext(err, errors.Context{
+					Path:   "service.deployer.Run: prepare",
+					Params: errors.Params{"deployment": d.ID},
+				}))
 			}
 			if deployments[i].Status == d.Status {
 				continue
 			}
 			deployments[i], err = s.deployments.Update(ctx, d)
 			if err != nil {
-				log.Printf("service.deployer.Run: update deployment #%d status to %s: %v\n", d.ID, d.Status, err)
+				log.Println(errors.WrapContext(err, errors.Context{
+					Path:   "service.deployer.Run: update status",
+					Params: errors.Params{"deployment": d.ID, "status": d.Status},
+				}))
 				continue
 			}
 			if d.Status != model.DeploymentStatusFailed {
@@ -100,7 +106,10 @@ func (s Deployer) Run(ctx context.Context) error {
 			}
 			d, err = s.deployments.Update(ctx, d)
 			if err != nil {
-				log.Printf("service.deployer.Run: update deployment #%d status to %s: %v\n", d.ID, d.Status, err)
+				log.Println(errors.WrapContext(err, errors.Context{
+					Path:   "service.deployer.Run: update status",
+					Params: errors.Params{"deployment": d.ID, "status": d.Status},
+				}))
 				continue
 			}
 			log.Printf("Deployment #%d is %s\n", d.ID, d.Status)
@@ -108,7 +117,7 @@ func (s Deployer) Run(ctx context.Context) error {
 	}()
 	err = s.updateDockerCompose(dockerCompose)
 	if err != nil {
-		return err
+		return errors.WrapContext(err, errors.Context{Path: "service.deployer.Run: updateDockerCompose"})
 	}
 	_, err = s.os.RunCmd(ctx, model.Cmd{
 		Name: "docker-compose",
@@ -117,7 +126,7 @@ func (s Deployer) Run(ctx context.Context) error {
 		Log:  true,
 	})
 	if err != nil {
-		return fmt.Errorf("service.deployer.Run: up services: %w", err)
+		return errors.WrapContext(err, errors.Context{Path: "service.deployer.Run: up services"})
 	}
 	log.Println("Docker-compose configuration is updated")
 	success = true
@@ -128,13 +137,19 @@ func (s Deployer) Run(ctx context.Context) error {
 func (s Deployer) AutoRebuild(ctx context.Context, b model.Branch) error {
 	deployments, err := s.deployments.FindForAutoRebuild(ctx, b)
 	if err != nil {
-		return fmt.Errorf("service.deployer.AutoRebuild: find deployments: %w; branch ID = %d", err, b.ID)
+		return errors.WrapContext(err, errors.Context{
+			Path:   "service.deployer.AutoRebuild: find",
+			Params: errors.Params{"branch": b.ID},
+		})
 	}
 	for _, d := range deployments {
 		d.Status = model.DeploymentStatusEnqueued
 		d, err = s.deployments.Update(ctx, d)
 		if err != nil {
-			log.Printf("service.deployer.AutoRebuild: update deployment #%d status to %s: %v\n", d.ID, d.Status, err)
+			log.Println(errors.WrapContext(err, errors.Context{
+				Path:   "service.deployer.AutoRebuild: update",
+				Params: errors.Params{"deployment": d.ID, "status": d.Status},
+			}))
 			continue
 		}
 		log.Printf("Deployment #%d is enqueued for auto-rebuilding\n", d.ID)
@@ -154,26 +169,41 @@ func (s Deployer) prepare(
 		b, ok = bm[db.ID]
 		if !ok {
 			d.Status = model.DeploymentStatusFailed
-			return fmt.Errorf("service.deployer.prepare: deployment #%d points to deleted branch #%d", d.ID, db.ID)
+			return errors.NewWithContext("deployment points to deleted branch", errors.Context{
+				Path:   "service.deployer.prepare",
+				Params: errors.Params{"deployment": d.ID, "branch": db.ID},
+			})
 		}
 		bdcData, err := s.branches.LoadComposeData(ctx, b)
 		if err != nil {
 			d.Status = model.DeploymentStatusFailed
-			return fmt.Errorf("service.deployer.prepare: deployment #%d: load docker compose cfg for branch #%d", d.ID, b.ID)
+			return errors.WrapContext(err, errors.Context{
+				Path:   "service.deployer.prepare: LoadComposeData",
+				Params: errors.Params{"deployment": d.ID, "branch": b.ID},
+			})
 		}
 		variables, err := s.variables.ListForDeployment(ctx, *d)
 		if err != nil {
-			return fmt.Errorf("service.deployer.prepare: list variables: %w; deployment ID = %d", err, d.ID)
+			return errors.WrapContext(err, errors.Context{
+				Path:   "service.deployer.prepare: list variables",
+				Params: errors.Params{"deployment": d.ID},
+			})
 		}
 		bdcData, err = s.variables.Replace(ctx, bdcData, variables)
 		if err != nil {
 			d.Status = model.DeploymentStatusFailed
-			return fmt.Errorf("service.deployer.prepare: deployment #%d: put variables to docker compose cfg for branch #%d: %w", d.ID, b.ID, err)
+			return errors.WrapContext(err, errors.Context{
+				Path:   "service.deployer.prepare: replace variables",
+				Params: errors.Params{"deployment": d.ID, "branch": b.ID},
+			})
 		}
 		var bdc model.DockerCompose
 		err = s.dockerMarshaller.Unmarshal(bdcData, &bdc)
 		if err != nil {
-			return fmt.Errorf("service.deployer.prepare: deployment #%d: unmarshal compose cfg for branch #%d: %w", d.ID, b.ID, err)
+			return errors.WrapContext(err, errors.Context{
+				Path:   "service.deployer.prepare: unmarshal compose cfg",
+				Params: errors.Params{"deployment": d.ID, "branch": b.ID},
+			})
 		}
 		d.Branches[i].Hash = b.Hash
 		for bdcServiceName, bdcService := range bdc.Services {
@@ -185,7 +215,10 @@ func (s Deployer) prepare(
 		d.Status = model.DeploymentStatusBuilding
 	case model.DeploymentStatusReady:
 	default:
-		return fmt.Errorf("service.deployer.prepare: deployment #%d: unexpected status: %s", d.ID, d.Status)
+		return errors.NewWithContext("unexpected status", errors.Context{
+			Path:   "service.deployer.prepare",
+			Params: errors.Params{"deployment": d.ID, "status": d.Status},
+		})
 	}
 	return nil
 }
@@ -193,21 +226,21 @@ func (s Deployer) prepare(
 func (s Deployer) updateDockerCompose(dc model.DockerCompose) error {
 	dcData, err := s.dockerMarshaller.Marshal(dc)
 	if err != nil {
-		return fmt.Errorf("service.deployer.updateDockerCompose: marshal: %w", err)
+		return errors.WrapContext(err, errors.Context{Path: "service.deployer.updateDockerCompose: marshal"})
 	}
 	f, err := os.OpenFile(s.workDir+"/docker-compose.yml", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
 	if err != nil {
-		return fmt.Errorf("service.deployer.updateDockerCompose: open file: %w", err)
+		return errors.WrapContext(err, errors.Context{Path: "service.deployer.updateDockerCompose: open file"})
 	}
 	defer func() {
 		err := f.Close()
 		if err != nil {
-			log.Printf("service.deployer.updateDockerCompose: close file: %v\n", err)
+			log.Println(errors.WrapContext(err, errors.Context{Path: "service.deployer.updateDockerCompose: close file"}))
 		}
 	}()
 	_, err = f.Write(dcData)
 	if err != nil {
-		return fmt.Errorf("service.deployer.updateDockerCompose: write: %w", err)
+		return errors.WrapContext(err, errors.Context{Path: "service.deployer.updateDockerCompose: write"})
 	}
 	return nil
 }

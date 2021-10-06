@@ -2,8 +2,8 @@ package rest
 
 import (
 	"encoding/json"
-	"errors"
 	"github.com/beldeveloper/app-lego/model"
+	"github.com/beldeveloper/go-errors-context"
 	"log"
 	"net/http"
 )
