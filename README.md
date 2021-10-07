@@ -7,7 +7,7 @@ Such an approach provides the QA team with the possibility to test the particula
 
 ## Technical requirements
 
-The application requires Docker and Postgres.
+The application requires Docker, Postgres, and Git.
 
 ## Environment variables
 
