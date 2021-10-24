@@ -70,6 +70,7 @@ func (c Controller) AddRepository(ctx context.Context, f model.FormAddRepository
 		Alias:     f.Alias,
 		Name:      f.Name,
 		Status:    model.RepositoryStatusPending,
+		CfgFile:   f.CfgFile,
 		UpdatedAt: time.Now(),
 	})
 	if err != nil {

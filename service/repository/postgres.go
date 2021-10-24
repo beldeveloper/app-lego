@@ -23,7 +23,8 @@ type Postgres struct {
 // FindAll returns all repositories.
 func (p Postgres) FindAll(ctx context.Context) ([]model.Repository, error) {
 	q := fmt.Sprintf(
-		`SELECT "id", "type", "alias", "name", "status", "updated_at" FROM "%s"."repositories" ORDER BY "alias"`,
+		`SELECT "id", "type", "alias", "name", "status", "cfg_file", "updated_at"
+		FROM "%s"."repositories" ORDER BY "alias"`,
 		p.schema,
 	)
 	rows, err := p.conn.Query(ctx, q)
@@ -34,7 +35,7 @@ func (p Postgres) FindAll(ctx context.Context) ([]model.Repository, error) {
 	res := make([]model.Repository, 0)
 	var r model.Repository
 	for rows.Next() {
-		err = rows.Scan(&r.ID, &r.Type, &r.Alias, &r.Name, &r.Status, &r.UpdatedAt)
+		err = rows.Scan(&r.ID, &r.Type, &r.Alias, &r.Name, &r.Status, &r.CfgFile, &r.UpdatedAt)
 		if err != nil {
 			return nil, errors.WrapContext(err, errors.Context{Path: "service.repository.postgres.FindAll: scan"})
 		}
@@ -47,10 +48,11 @@ func (p Postgres) FindAll(ctx context.Context) ([]model.Repository, error) {
 func (p Postgres) FindByID(ctx context.Context, id uint64) (model.Repository, error) {
 	var r model.Repository
 	q := fmt.Sprintf(
-		`SELECT "id", "type", "alias", "name", "status", "updated_at" FROM "%s"."repositories" WHERE "id" = $1`,
+		`SELECT "id", "type", "alias", "name", "status", "cfg_file", "updated_at"
+		FROM "%s"."repositories" WHERE "id" = $1`,
 		p.schema,
 	)
-	err := p.conn.QueryRow(ctx, q, id).Scan(&r.ID, &r.Type, &r.Alias, &r.Name, &r.Status, &r.UpdatedAt)
+	err := p.conn.QueryRow(ctx, q, id).Scan(&r.ID, &r.Type, &r.Alias, &r.Name, &r.Status, &r.CfgFile, &r.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		err = model.ErrNotFound
 	}
@@ -64,12 +66,12 @@ func (p Postgres) FindByID(ctx context.Context, id uint64) (model.Repository, er
 func (p Postgres) FindPending(ctx context.Context) (model.Repository, error) {
 	var r model.Repository
 	q := fmt.Sprintf(
-		`SELECT "id", "type", "alias", "name", "status", "updated_at"
+		`SELECT "id", "type", "alias", "name", "status", "cfg_file", "updated_at"
 		FROM "%s"."repositories" WHERE "status" = $1 LIMIT 1`,
 		p.schema,
 	)
 	err := p.conn.QueryRow(ctx, q, model.RepositoryStatusPending).
-		Scan(&r.ID, &r.Type, &r.Alias, &r.Name, &r.Status, &r.UpdatedAt)
+		Scan(&r.ID, &r.Type, &r.Alias, &r.Name, &r.Status, &r.CfgFile, &r.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return r, model.ErrNotFound
 	}
@@ -80,12 +82,12 @@ func (p Postgres) FindPending(ctx context.Context) (model.Repository, error) {
 func (p Postgres) FindOutdated(ctx context.Context) (model.Repository, error) {
 	var r model.Repository
 	q := fmt.Sprintf(
-		`SELECT "id", "type", "alias", "name", "status", "updated_at"
+		`SELECT "id", "type", "alias", "name", "status", "cfg_file", "updated_at"
 		FROM "%s"."repositories" WHERE "status" = $1 ORDER BY "updated_at" ASC LIMIT 1`,
 		p.schema,
 	)
 	err := p.conn.QueryRow(ctx, q, model.RepositoryStatusReady).
-		Scan(&r.ID, &r.Type, &r.Alias, &r.Name, &r.Status, &r.UpdatedAt)
+		Scan(&r.ID, &r.Type, &r.Alias, &r.Name, &r.Status, &r.CfgFile, &r.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return r, model.ErrNotFound
 	}
@@ -95,18 +97,21 @@ func (p Postgres) FindOutdated(ctx context.Context) (model.Repository, error) {
 // Add saves a new repository.
 func (p Postgres) Add(ctx context.Context, r model.Repository) (model.Repository, error) {
 	q := fmt.Sprintf(
-		`INSERT INTO "%s"."repositories" ("type", "alias", "name", "status", "updated_at")
-		VALUES ($1, $2, $3, $4, $5) RETURNING "id"`,
+		`INSERT INTO "%s"."repositories" ("type", "alias", "name", "status", "cfg_file", "updated_at")
+		VALUES ($1, $2, $3, $4, $5, $6) RETURNING "id"`,
 		p.schema,
 	)
-	err := p.conn.QueryRow(ctx, q, r.Type, r.Alias, r.Name, r.Status, r.UpdatedAt).Scan(&r.ID)
+	err := p.conn.QueryRow(ctx, q, r.Type, r.Alias, r.Name, r.Status, r.CfgFile, r.UpdatedAt).Scan(&r.ID)
 	return r, errors.WrapContext(err, errors.Context{Path: "service.repository.postgres.Add: scan"})
 }
 
 // Update modifies a specific repository.
 func (p Postgres) Update(ctx context.Context, r model.Repository) (model.Repository, error) {
-	q := fmt.Sprintf(`UPDATE "%s"."repositories" SET "updated_at" = $2, "status" = $3 WHERE "id" = $1`, p.schema)
-	_, err := p.conn.Exec(ctx, q, r.ID, r.UpdatedAt, r.Status)
+	q := fmt.Sprintf(
+		`UPDATE "%s"."repositories" SET "updated_at" = $2, "status" = $3, "cfg_file" = $4 WHERE "id" = $1`,
+		p.schema,
+	)
+	_, err := p.conn.Exec(ctx, q, r.ID, r.UpdatedAt, r.Status, r.CfgFile)
 	return r, errors.WrapContext(err, errors.Context{
 		Path:   "service.repository.postgres.Update: exec",
 		Params: errors.Params{"repository": r.ID, "status": r.Status},

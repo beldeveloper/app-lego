@@ -23,12 +23,14 @@ type Repository struct {
 	Alias     string    `json:"alias"`
 	Name      string    `json:"name"`
 	Status    string    `json:"status"`
+	CfgFile   string    `json:"cfgFile"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // FormAddRepository is a new repository form.
 type FormAddRepository struct {
-	Type  string `json:"type"`
-	Alias string `json:"alias"`
-	Name  string `json:"name"`
+	Type    string `json:"type"`
+	Alias   string `json:"alias"`
+	Name    string `json:"name"`
+	CfgFile string `json:"cfgFile"`
 }

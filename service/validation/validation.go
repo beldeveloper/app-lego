@@ -29,5 +29,6 @@ func (v Validation) AddRepository(ctx context.Context, f model.FormAddRepository
 	if f.Name == "" {
 		return f, fmt.Errorf("%w: repository name must not be empty", model.ErrBadInput)
 	}
+	f.CfgFile = strings.TrimSpace(f.CfgFile)
 	return f, nil
 }

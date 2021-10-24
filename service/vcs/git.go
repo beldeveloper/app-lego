@@ -15,6 +15,11 @@ import (
 	"strings"
 )
 
+const (
+	// DefaultCfgFile defines the default name of the repository configuration file.
+	DefaultCfgFile = "app-lego.yml"
+)
+
 // NewGit creates a new instance of the Git VCS service.
 func NewGit(workDir model.FilePath, os appOs.Service, variable variable.Service, cfgMarshaller marshaller.Service) Service {
 	return Git{
@@ -130,7 +135,11 @@ func (g Git) SwitchBranch(ctx context.Context, r model.Repository, b model.Branc
 // ReadConfiguration reads the configuration files from the specific branch.
 func (g Git) ReadConfiguration(ctx context.Context, r model.Repository, b model.Branch) (model.BranchCfg, error) {
 	var cfg model.BranchCfg
-	f, err := os.OpenFile(fmt.Sprintf("%s/%s/app-lego.yml", g.workDir, r.Alias), os.O_RDONLY, 0755)
+	cfgFile := DefaultCfgFile
+	if r.CfgFile != "" {
+		cfgFile = r.CfgFile
+	}
+	f, err := os.OpenFile(fmt.Sprintf("%s/%s/"+cfgFile, g.workDir, r.Alias), os.O_RDONLY, 0755)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			err = model.ErrConfigurationNotFound
