@@ -2,6 +2,7 @@ package builder
 
 import (
 	"context"
+	"fmt"
 	"github.com/beldeveloper/app-lego/model"
 	"github.com/beldeveloper/app-lego/service/branch"
 	"github.com/beldeveloper/app-lego/service/marshaller"
@@ -11,6 +12,7 @@ import (
 	"github.com/beldeveloper/app-lego/service/vcs"
 	"github.com/beldeveloper/go-errors-context"
 	"log"
+	goos "os"
 	"strings"
 	"sync"
 )
@@ -26,7 +28,9 @@ func NewBuilder(
 	dockerMarshaller marshaller.Service,
 ) Service {
 	return Builder{
-		workDir:          string(workDir + "/" + model.RepositoriesDir),
+		reposDir:         string(workDir + "/" + model.RepositoriesDir),
+		configDir:        string(workDir + "/" + model.ConfigDir),
+		branchesDir:      string(workDir + "/" + model.BranchesDir),
 		vcs:              vcs,
 		os:               os,
 		repositories:     repositories,
@@ -40,7 +44,9 @@ func NewBuilder(
 
 // Builder is a service that is in charge of building the repository branch.
 type Builder struct {
-	workDir          string
+	reposDir         string
+	configDir        string
+	branchesDir      string
 	vcs              vcs.Service
 	os               os.Service
 	repositories     repository.Service
@@ -75,6 +81,8 @@ func (b Builder) Build(ctx context.Context, branch model.Branch) error {
 			Params: errors.Params{"branch": branch.ID, "status": branch.Status},
 		})
 	}
+	_ = goos.RemoveAll(fmt.Sprintf("%s/%d", b.branchesDir, branch.ID))
+	_ = goos.Mkdir(fmt.Sprintf("%s/%d", b.branchesDir, branch.ID), 0755)
 	b.toggleQueue(branch.ID, false)
 	step := b.prepareSteps(ctx, branch)
 	for step != nil {
@@ -88,7 +96,7 @@ func (b Builder) Build(ctx context.Context, branch model.Branch) error {
 			} else {
 				branch.Status = model.BranchStatusFailed
 				err = errors.WrapContext(err, errors.Context{
-					Path:   "service.builder.Build: update status",
+					Path:   "service.builder.Build: run step",
 					Params: errors.Params{"branch": branch.ID, "step": step.name},
 				})
 			}
@@ -141,6 +149,7 @@ func (b Builder) updateBranchStatus(ctx context.Context, branch model.Branch) er
 func (b Builder) prepareSteps(ctx context.Context, branch model.Branch) *buildingStep {
 	var r model.Repository
 	var cfg model.BranchCfg
+	var preDeployCmd, postDeployCmd []model.Cmd
 
 	fetchRepositoryStep := buildingStep{
 		name: "find repository",
@@ -169,7 +178,11 @@ func (b Builder) prepareSteps(ctx context.Context, branch model.Branch) *buildin
 	finishStep := buildingStep{
 		name: "finish",
 		action: func() error {
-			data, err := b.dockerMarshaller.Marshal(cfg.Compose)
+			data, err := b.dockerMarshaller.Marshal(model.BranchComposeData{
+				PreDeploy:       preDeployCmd,
+				PostDeploy:      postDeployCmd,
+				ComposeServices: cfg.Compose.Services,
+			})
 			if err != nil {
 				return errors.WrapContext(err, errors.Context{Path: "service.builder.prepareSteps.finishStep: marshal"})
 			}
@@ -182,21 +195,23 @@ func (b Builder) prepareSteps(ctx context.Context, branch model.Branch) *buildin
 	}
 
 	readConfigurationStep.action = func() (err error) {
-		cfg, err = b.vcs.ReadConfiguration(ctx, r, branch)
+		cfg, err = b.readConfiguration(ctx, r, branch)
 		if err != nil {
 			return errors.WrapContext(err, errors.Context{
 				Path:   "service.builder.prepareSteps.readConfigurationStep: read configuration",
 				Params: errors.Params{"branch": branch.ID},
 			})
 		}
+		preDeployCmd = cfg.Commands(cfg.PreDeploy)
+		postDeployCmd = cfg.Commands(cfg.PostDeploy)
 		currStep := &readConfigurationStep
-		for _, cmd := range cfg.Commands() {
+		for _, cmd := range cfg.Commands(cfg.Build) {
 			cmd := cmd
 			cmd.Log = true
 			if cmd.Dir == "" {
-				cmd.Dir = b.workDir + "/" + r.Alias
+				cmd.Dir = b.reposDir + "/" + r.Alias
 			} else if strings.HasPrefix(cmd.Dir, ".") {
-				cmd.Dir = b.workDir + "/" + r.Alias + "/" + cmd.Dir
+				cmd.Dir = b.reposDir + "/" + r.Alias + "/" + cmd.Dir
 			}
 			step := buildingStep{
 				name: "command: " + cmd.Name + " " + strings.Join(cmd.Args, " "),
@@ -220,4 +235,53 @@ func (b Builder) prepareSteps(ctx context.Context, branch model.Branch) *buildin
 	readConfigurationStep.next = &finishStep
 
 	return &fetchRepositoryStep
+}
+
+func (b Builder) readConfiguration(ctx context.Context, r model.Repository, branch model.Branch) (model.BranchCfg, error) {
+	var cfg model.BranchCfg
+	cfgFile := vcs.DefaultCfgFile
+	if r.CfgFile != "" {
+		cfgFile = r.CfgFile
+	}
+	cfgFile = fmt.Sprintf("%s/%s/%s", b.reposDir, r.Alias, cfgFile)
+	cfgData, err := b.os.ReadFile(ctx, cfgFile)
+	if err != nil && errors.Is(err, goos.ErrNotExist) {
+		cfgFile = fmt.Sprintf("%s/repositories/%s/%s", b.configDir, r.Alias, vcs.DefaultCfgFile)
+		cfgData, err = b.os.ReadFile(ctx, cfgFile)
+	}
+	if err != nil {
+		if errors.Is(err, goos.ErrNotExist) {
+			err = model.ErrConfigurationNotFound
+		}
+		return cfg, errors.WrapContext(err, errors.Context{
+			Path:   "service.builder.unmarshalConfiguration: read vcs configuration",
+			Params: errors.Params{"branch": branch.ID},
+		})
+	}
+	cfg.Variables, err = b.variables.ListFromSources(ctx, model.VariablesSources{
+		Repository: r,
+		Branch:     branch,
+		CustomData: cfgData,
+	})
+	if err != nil {
+		return cfg, errors.WrapContext(err, errors.Context{
+			Path:   "service.builder.unmarshalConfiguration: list variables",
+			Params: errors.Params{"repository": r.ID, "branch": branch.ID},
+		})
+	}
+	cfgData, err = b.variables.Replace(ctx, cfgData, cfg.Variables)
+	if err != nil {
+		return cfg, errors.WrapContext(err, errors.Context{
+			Path:   "service.builder.unmarshalConfiguration: replace variables",
+			Params: errors.Params{"repository": r.ID, "branch": branch.ID},
+		})
+	}
+	err = b.dockerMarshaller.Unmarshal(cfgData, &cfg)
+	if err != nil {
+		return cfg, errors.WrapContext(err, errors.Context{
+			Path:   "service.builder.unmarshalConfiguration: unmarshal cfg",
+			Params: errors.Params{"repository": r.ID, "branch": branch.ID},
+		})
+	}
+	return cfg, nil
 }

@@ -23,10 +23,11 @@ type Postgres struct {
 // FindAll returns all deployments.
 func (p Postgres) FindAll(ctx context.Context) ([]model.Deployment, error) {
 	q := fmt.Sprintf(
-		`SELECT "id", "status", "created_at", "auto_rebuild", "branches" FROM "%s"."deployments" ORDER BY "created_at" DESC`,
+		`SELECT "id", "status", "created_at", "auto_rebuild", "branches" FROM "%s"."deployments"
+		WHERE "status" != $1 ORDER BY "created_at" DESC`,
 		p.schema,
 	)
-	rows, err := p.conn.Query(ctx, q)
+	rows, err := p.conn.Query(ctx, q, model.DeploymentStatusClosed)
 	if err != nil {
 		return nil, errors.WrapContext(err, errors.Context{Path: "service.deployment.postgres.FindAll: query"})
 	}

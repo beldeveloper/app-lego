@@ -2,15 +2,10 @@ package vcs
 
 import (
 	"context"
-	"fmt"
 	"github.com/beldeveloper/app-lego/model"
-	"github.com/beldeveloper/app-lego/service/marshaller"
 	appOs "github.com/beldeveloper/app-lego/service/os"
-	"github.com/beldeveloper/app-lego/service/variable"
 	"github.com/beldeveloper/go-errors-context"
-	"io/ioutil"
 	"log"
-	"os"
 	"regexp"
 	"strings"
 )
@@ -21,12 +16,10 @@ const (
 )
 
 // NewGit creates a new instance of the Git VCS service.
-func NewGit(workDir model.FilePath, os appOs.Service, variable variable.Service, cfgMarshaller marshaller.Service) Service {
+func NewGit(workDir model.FilePath, os appOs.Service) Service {
 	return Git{
 		workDir:        string(workDir + "/" + model.RepositoriesDir),
 		os:             os,
-		variable:       variable,
-		cfgMarshaller:  cfgMarshaller,
 		remoteBranchRx: regexp.MustCompile("^([a-f0-9]+)\\s+refs/(heads|tags)/(.*)$"),
 	}
 }
@@ -35,8 +28,6 @@ func NewGit(workDir model.FilePath, os appOs.Service, variable variable.Service,
 type Git struct {
 	workDir        string
 	os             appOs.Service
-	variable       variable.Service
-	cfgMarshaller  marshaller.Service
 	remoteBranchRx *regexp.Regexp
 }
 
@@ -105,9 +96,25 @@ func (g Git) SwitchBranch(ctx context.Context, r model.Repository, b model.Branc
 			Params: errors.Params{"repository": r.ID},
 		})
 	}
+	newBranch := b.Name
+	if b.Type == model.BranchTypeTag {
+		newBranch = "tags/" + b.Name
+	}
 	_, err = g.os.RunCmd(ctx, model.Cmd{
 		Name: "git",
-		Args: []string{"checkout", b.Name},
+		Args: []string{"reset", "--hard"},
+		Dir:  g.workDir + "/" + r.Alias,
+		Log:  true,
+	})
+	if err != nil {
+		log.Println(errors.WrapContext(err, errors.Context{
+			Path:   "service.vcs.git.SwitchBranch: reset",
+			Params: errors.Params{"repository": r.ID},
+		}))
+	}
+	_, err = g.os.RunCmd(ctx, model.Cmd{
+		Name: "git",
+		Args: []string{"checkout", newBranch},
 		Dir:  g.workDir + "/" + r.Alias,
 		Log:  true,
 	})
@@ -116,6 +123,9 @@ func (g Git) SwitchBranch(ctx context.Context, r model.Repository, b model.Branc
 			Path:   "service.vcs.git.SwitchBranch: checkout",
 			Params: errors.Params{"repository": r.ID, "branchName": b.Name},
 		})
+	}
+	if b.Type == model.BranchTypeTag {
+		return nil
 	}
 	_, err = g.os.RunCmd(ctx, model.Cmd{
 		Name: "git",
@@ -130,61 +140,4 @@ func (g Git) SwitchBranch(ctx context.Context, r model.Repository, b model.Branc
 		})
 	}
 	return nil
-}
-
-// ReadConfiguration reads the configuration files from the specific branch.
-func (g Git) ReadConfiguration(ctx context.Context, r model.Repository, b model.Branch) (model.BranchCfg, error) {
-	var cfg model.BranchCfg
-	cfgFile := DefaultCfgFile
-	if r.CfgFile != "" {
-		cfgFile = r.CfgFile
-	}
-	f, err := os.OpenFile(fmt.Sprintf("%s/%s/"+cfgFile, g.workDir, r.Alias), os.O_RDONLY, 0755)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			err = model.ErrConfigurationNotFound
-		}
-		return cfg, errors.WrapContext(err, errors.Context{
-			Path:   "service.vcs.git.ReadConfiguration: open file",
-			Params: errors.Params{"repository": r.ID, "branch": b.ID},
-		})
-	}
-	defer func() {
-		err := f.Close()
-		if err != nil {
-			log.Println(errors.WrapContext(err, errors.Context{
-				Path:   "service.vcs.git.ReadConfiguration: close file",
-				Params: errors.Params{"repository": r.ID, "branch": b.ID},
-			}))
-		}
-	}()
-	cfgData, err := ioutil.ReadAll(f)
-	if err != nil {
-		return cfg, errors.WrapContext(err, errors.Context{
-			Path:   "service.vcs.git.ReadConfiguration: read file",
-			Params: errors.Params{"repository": r.ID, "branch": b.ID},
-		})
-	}
-	cfg.Variables, err = g.variable.ListFromSources(ctx, model.VariablesSources{Repository: r, Branch: b, CustomData: cfgData})
-	if err != nil {
-		return cfg, errors.WrapContext(err, errors.Context{
-			Path:   "service.vcs.git.ReadConfiguration: list variables",
-			Params: errors.Params{"repository": r.ID, "branch": b.ID},
-		})
-	}
-	cfgData, err = g.variable.Replace(ctx, cfgData, cfg.Variables)
-	if err != nil {
-		return cfg, errors.WrapContext(err, errors.Context{
-			Path:   "service.vcs.git.ReadConfiguration: replace variables",
-			Params: errors.Params{"repository": r.ID, "branch": b.ID},
-		})
-	}
-	err = g.cfgMarshaller.Unmarshal(cfgData, &cfg)
-	if err != nil {
-		return cfg, errors.WrapContext(err, errors.Context{
-			Path:   "service.vcs.git.ReadConfiguration: unmarshal cfg",
-			Params: errors.Params{"repository": r.ID, "branch": b.ID},
-		})
-	}
-	return cfg, nil
 }

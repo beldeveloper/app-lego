@@ -7,6 +7,8 @@ var (
 	ErrNotFound = errors.New("not found")
 	// ErrBadInput represents the error for the cases when the user input is invalid.
 	ErrBadInput = errors.New("bad input")
+	// ErrUnauthorized represents the error for the cases when the authorization is required.
+	ErrUnauthorized = errors.New("unauthorized")
 	// ErrBuildCanceled represents the error for the case when the build process was automatically canceled.
 	ErrBuildCanceled = errors.New("build canceled")
 	// ErrConfigurationNotFound represents the error for the case when the configuration was not found.

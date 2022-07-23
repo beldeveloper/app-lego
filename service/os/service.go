@@ -8,4 +8,5 @@ import (
 // Service defines the interface of the service that is in charge of interacting with the operating system.
 type Service interface {
 	RunCmd(ctx context.Context, cmd model.Cmd) (string, error)
+	ReadFile(ctx context.Context, path string) ([]byte, error)
 }

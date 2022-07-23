@@ -17,6 +17,9 @@ func NewVariable(marshaller marshaller.Service, repository repository.Service, w
 		marshaller:     marshaller,
 		repository:     repository,
 		customFilesDir: string(workDir + "/" + model.CustomDir),
+		reposDir:       string(workDir + "/" + model.RepositoriesDir),
+		branchesDir:    string(workDir + "/" + model.BranchesDir),
+		scriptsDir:     string(workDir + "/" + model.ScriptsDir),
 	}
 }
 
@@ -25,6 +28,9 @@ type Variable struct {
 	marshaller     marshaller.Service
 	repository     repository.Service
 	customFilesDir string
+	reposDir       string
+	branchesDir    string
+	scriptsDir     string
 }
 
 // ListFromSources returns the list of all available variables and their values according to the specific sources.
@@ -118,6 +124,11 @@ func (s Variable) ListForRepository(ctx context.Context, r model.Repository) ([]
 			Name:  "REPOSITORY_ALIAS",
 			Value: r.Alias,
 		},
+		{
+			Type:  model.VariableTypeBuilding,
+			Name:  "REPOSITORY_DIR",
+			Value: s.reposDir + "/" + r.Alias,
+		},
 	}
 	return append(variables, secrets...), nil
 }
@@ -144,6 +155,16 @@ func (s Variable) ListForBranch(ctx context.Context, b model.Branch) ([]model.Va
 			Name:  "BRANCH_HASH",
 			Value: b.Hash,
 		},
+		{
+			Type:  model.VariableTypeBuilding,
+			Name:  "SCRIPTS_DIR",
+			Value: s.scriptsDir,
+		},
+		{
+			Type:  model.VariableTypeBuilding,
+			Name:  "BRANCH_TMP_DIR",
+			Value: s.branchesDir + "/" + strconv.Itoa(int(b.ID)),
+		},
 	}, nil
 }
 
@@ -159,6 +180,11 @@ func (s Variable) ListForDeployment(ctx context.Context, d model.Deployment) ([]
 
 func (s Variable) ListStatic(ctx context.Context) ([]model.Variable, error) {
 	return []model.Variable{
+		{
+			Type:  model.VariableTypeBuilding,
+			Name:  "BRANCHES_DIR",
+			Value: s.branchesDir,
+		},
 		{
 			Type:  model.VariableTypeBuilding,
 			Name:  "CUSTOM_FILES_DIR",

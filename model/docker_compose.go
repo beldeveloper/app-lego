@@ -1,12 +1,5 @@
 package model
 
-const (
-	// DockerComposeVersion defines the docker-compose version used for deploying the target application.
-	DockerComposeVersion = "3.3"
-	// TraefikImage defines the Traefik (reverse-proxy) docker image.
-	TraefikImage = "traefik:v2.5.3"
-)
-
 // DockerCompose is a model that represents the docker-compose configuration.
 type DockerCompose struct {
 	Version  string                          `yaml:"version"`
@@ -22,4 +15,11 @@ type DockerComposeService struct {
 	Command     []string `yaml:"command,omitempty"`
 	Volumes     []string `yaml:"volumes,omitempty"`
 	Labels      []string `yaml:"labels,omitempty"`
+}
+
+// DockerComposeNetwork is a model that represents the docker-compose network configuration.
+type DockerComposeNetwork struct {
+	Name     string `yaml:"name"`
+	Driver   string `yaml:"driver"`
+	External bool   `yaml:"external"`
 }

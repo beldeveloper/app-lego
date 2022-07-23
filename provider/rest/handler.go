@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"github.com/beldeveloper/app-lego/controller"
 	"github.com/beldeveloper/app-lego/model"
+	"github.com/beldeveloper/go-errors-context"
 	"github.com/julienschmidt/httprouter"
 	"net/http"
 	"strconv"
 )
+
+const AccessKey = "sdfUIh7nU34k"
 
 // NewHandler creates a new instance of the REST API handler.
 func NewHandler(c controller.Service) Handler {
@@ -22,6 +25,11 @@ type Handler struct {
 
 // Repositories returns the list of repositories.
 func (h Handler) Repositories(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	err := h.validateKey(r)
+	if err != nil {
+		apiError(w, err)
+		return
+	}
 	res, err := h.c.Repositories(r.Context())
 	if err != nil {
 		apiError(w, err)
@@ -32,8 +40,13 @@ func (h Handler) Repositories(w http.ResponseWriter, r *http.Request, ps httprou
 
 // AddRepository adds new repository and puts int to pending download status.
 func (h Handler) AddRepository(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	err := h.validateKey(r)
+	if err != nil {
+		apiError(w, err)
+		return
+	}
 	var f model.FormAddRepository
-	err := json.NewDecoder(r.Body).Decode(&f)
+	err = json.NewDecoder(r.Body).Decode(&f)
 	if err != nil {
 		apiError(w, err)
 		return
@@ -48,6 +61,11 @@ func (h Handler) AddRepository(w http.ResponseWriter, r *http.Request, ps httpro
 
 // Branches returns the list of branches.
 func (h Handler) Branches(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	err := h.validateKey(r)
+	if err != nil {
+		apiError(w, err)
+		return
+	}
 	res, err := h.c.Branches(r.Context())
 	if err != nil {
 		apiError(w, err)
@@ -58,6 +76,11 @@ func (h Handler) Branches(w http.ResponseWriter, r *http.Request, ps httprouter.
 
 // Deployments returns the list of deployments.
 func (h Handler) Deployments(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	err := h.validateKey(r)
+	if err != nil {
+		apiError(w, err)
+		return
+	}
 	res, err := h.c.Deployments(r.Context())
 	if err != nil {
 		apiError(w, err)
@@ -68,8 +91,13 @@ func (h Handler) Deployments(w http.ResponseWriter, r *http.Request, ps httprout
 
 // AddDeployment adds and enqueues new deployment.
 func (h Handler) AddDeployment(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	err := h.validateKey(r)
+	if err != nil {
+		apiError(w, err)
+		return
+	}
 	var f model.FormAddDeployment
-	err := json.NewDecoder(r.Body).Decode(&f)
+	err = json.NewDecoder(r.Body).Decode(&f)
 	if err != nil {
 		apiError(w, err)
 		return
@@ -84,6 +112,11 @@ func (h Handler) AddDeployment(w http.ResponseWriter, r *http.Request, ps httpro
 
 // RebuildDeployment enqueues the existing deployment for rebuilding.
 func (h Handler) RebuildDeployment(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	err := h.validateKey(r)
+	if err != nil {
+		apiError(w, err)
+		return
+	}
 	id, err := strconv.Atoi(ps.ByName("id"))
 	if err != nil {
 		apiError(w, fmt.Errorf("%w: invalid deployment id: %v", model.ErrBadInput, err))
@@ -99,6 +132,11 @@ func (h Handler) RebuildDeployment(w http.ResponseWriter, r *http.Request, ps ht
 
 // CloseDeployment enqueues the existing deployment for closing.
 func (h Handler) CloseDeployment(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	err := h.validateKey(r)
+	if err != nil {
+		apiError(w, err)
+		return
+	}
 	id, err := strconv.Atoi(ps.ByName("id"))
 	if err != nil {
 		apiError(w, fmt.Errorf("%w: invalid deployment id: %v", model.ErrBadInput, err))
@@ -110,4 +148,11 @@ func (h Handler) CloseDeployment(w http.ResponseWriter, r *http.Request, ps http
 		return
 	}
 	apiSuccess(w, nil)
+}
+
+func (h Handler) validateKey(r *http.Request) error {
+	if r.URL.Query().Get("accessKey") != AccessKey {
+		return errors.WrapContext(model.ErrUnauthorized, errors.Context{})
+	}
+	return nil
 }

@@ -7,19 +7,26 @@ import (
 	"github.com/beldeveloper/go-errors-context"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
+	"log"
+	"os"
 	"strconv"
 	"strings"
 )
 
 // NewPostgres creates a new instance of the branches service.
-func NewPostgres(conn *pgxpool.Pool, schema model.PgSchema) Service {
-	return Postgres{conn: conn, schema: string(schema)}
+func NewPostgres(conn *pgxpool.Pool, schema model.PgSchema, workDir model.FilePath) Service {
+	return Postgres{
+		conn:        conn,
+		schema:      string(schema),
+		branchesDir: string(workDir + "/" + model.BranchesDir),
+	}
 }
 
 // Postgres implements the branches service with the Postgres storage.
 type Postgres struct {
-	conn   *pgxpool.Pool
-	schema string
+	conn        *pgxpool.Pool
+	schema      string
+	branchesDir string
 }
 
 // Sync takes the branches from VCS and updates the database according to the actual list.
@@ -211,7 +218,14 @@ func (p Postgres) Add(ctx context.Context, b model.Branch) (model.Branch, error)
 		p.schema,
 	)
 	err := p.conn.QueryRow(ctx, q, b.RepositoryID, b.Type, b.Name, b.Hash, b.Status).Scan(&b.ID)
-	return b, errors.WrapContext(err, errors.Context{Path: "service.branch.postgres.Add: scan"})
+	if err != nil {
+		return b, errors.WrapContext(err, errors.Context{Path: "service.branch.postgres.Add: scan"})
+	}
+	err = os.Mkdir(fmt.Sprintf("%s/%d", p.branchesDir, b.ID), 0755)
+	if err != nil {
+		return b, errors.WrapContext(err, errors.Context{Path: "service.branch.postgres.Add: make branch dir"})
+	}
+	return b, nil
 }
 
 // Update modifies a specific branch.
@@ -235,10 +249,22 @@ func (p Postgres) DeleteByIDs(ctx context.Context, ids []uint64) error {
 	}
 	q := fmt.Sprintf(`DELETE FROM "%s"."branches" WHERE "id" IN (%s)`, p.schema, strings.Join(idsStr, ","))
 	_, err := p.conn.Exec(ctx, q)
-	return errors.WrapContext(err, errors.Context{
-		Path:   "service.branch.postgres.DeleteByIDs: exec",
-		Params: errors.Params{"ids": ids},
-	})
+	if err != nil {
+		return errors.WrapContext(err, errors.Context{
+			Path:   "service.branch.postgres.DeleteByIDs: exec",
+			Params: errors.Params{"ids": ids},
+		})
+	}
+	for _, id := range idsStr {
+		err = os.RemoveAll(p.branchesDir + "/" + id)
+		if err != nil {
+			log.Println(errors.WrapContext(err, errors.Context{
+				Path:   "service.branch.postgres.DeleteByIDs: remove branch dir",
+				Params: errors.Params{"id": id, "dir": p.branchesDir + "/" + id},
+			}))
+		}
+	}
+	return nil
 }
 
 // UpdateStatus modifies the branch status.

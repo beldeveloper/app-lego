@@ -18,9 +18,9 @@ import (
 
 const (
 	// AddRepositoryFrequency defines the frequency of the add repository job.
-	AddRepositoryFrequency = time.Second * 10
+	AddRepositoryFrequency = time.Second * 2
 	// SyncRepositoryFrequency defines the frequency of the repository sync job.
-	SyncRepositoryFrequency = time.Second * 10
+	SyncRepositoryFrequency = time.Second * 2
 	// BuildBranchFrequency defines the frequency of the branch build job.
 	BuildBranchFrequency = time.Second * 2
 	// WatchDeploymentsFrequency defines the frequency of the watch deployments job.
@@ -71,7 +71,7 @@ func (c Controller) AddRepository(ctx context.Context, f model.FormAddRepository
 		Name:      f.Name,
 		Status:    model.RepositoryStatusPending,
 		CfgFile:   f.CfgFile,
-		UpdatedAt: time.Now(),
+		UpdatedAt: time.Now().Add(-time.Hour), // this way it will have a high priority for branches sync
 	})
 	if err != nil {
 		return r, errors.WrapContext(err, errors.Context{Path: "controller.AddRepository: add"})

@@ -51,6 +51,8 @@ func workDir() model.FilePath {
 
 func runHttpServer(c controller.Service) {
 	httpPort := os.Getenv("APP_LEGO_HTTP_PORT")
+	crtFile := os.Getenv("APP_LEGO_HTTPS_CRT")
+	keyFile := os.Getenv("APP_LEGO_HTTPS_KEY")
 	srv := &http.Server{
 		Addr:    ":" + httpPort,
 		Handler: rest.CreateRouter(c),
@@ -58,7 +60,13 @@ func runHttpServer(c controller.Service) {
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		var err error
+		if len(crtFile) > 0 {
+			err = srv.ListenAndServeTLS(crtFile, keyFile)
+		} else {
+			err = srv.ListenAndServe()
+		}
+		if err != nil && err != http.ErrServerClosed {
 			log.Fatalf("main: serve http: %v; port = %s\n", err, httpPort)
 		}
 	}()

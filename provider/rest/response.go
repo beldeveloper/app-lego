@@ -24,6 +24,8 @@ func apiError(w http.ResponseWriter, err error) {
 		code = http.StatusNotFound
 	case errors.Is(err, model.ErrBadInput):
 		code = http.StatusBadRequest
+	case errors.Is(err, model.ErrUnauthorized):
+		code = http.StatusUnauthorized
 	default:
 		log.Println(err)
 	}
