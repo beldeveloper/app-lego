@@ -1,0 +1,57 @@
+// protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative hook.proto
+syntax = "proto3";
+
+package hook;
+
+option go_package = ".;hook";
+
+message Repo {
+  uint64 id = 1;
+  string type = 2;
+  string alias = 3;
+}
+
+message Branch {
+  uint64 id = 1;
+  uint64 repoId = 2;
+  string type = 3;
+  string name = 4;
+  string hash = 5;
+}
+
+message Deployment {
+  uint64 id = 1;
+  map<string, Branch> branches = 2;
+  bool updated = 3;
+}
+
+message BuildBranchReq {
+  Repo repo = 1;
+  Branch branch = 2;
+}
+
+message BuildBranchResp {
+  string status = 1;
+}
+
+message DeployReq {
+  repeated Repo repos = 1;
+  repeated Deployment deployments = 2;
+}
+
+message DeployResp {
+  map<uint64, string> statuses = 1;
+}
+
+message CleanBranchesReq {
+  repeated uint64 ids = 1;
+}
+
+message EmptyMsg {
+}
+
+service Hook {
+  rpc BuildBranch(BuildBranchReq) returns (BuildBranchResp) {}
+  rpc Deploy(DeployReq) returns (DeployResp) {}
+  rpc CleanBranches(CleanBranchesReq) returns (EmptyMsg) {}
+}
