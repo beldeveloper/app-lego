@@ -58,7 +58,7 @@ func filterPath(path string) (string, error) {
 		return "", fmt.Errorf("filterDir -> invalid path: %w; dir=%s", err, path)
 	}
 	if path == "/" {
-		return "", fmt.Errorf("removeDir -> are you kidding me")
+		return "", fmt.Errorf("filterDir -> are you kidding me")
 	}
 	return path, nil
 }
