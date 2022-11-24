@@ -122,6 +122,18 @@ func (s Git) SwitchBranch(ctx context.Context, r app.Repository, b app.Branch) e
 	}
 	_, err = os.Exec(ctx, os.Cmd{
 		Name: "git",
+		Args: []string{"reset", "--hard", "origin/" + b.Name},
+		Dir:  s.reposDir + "/" + r.Alias,
+		Log:  true,
+	})
+	if err != nil {
+		log.Println(errors.WrapContext(err, errors.Context{
+			Path:   "svc.Git.SwitchBranch.reset",
+			Params: errors.Params{"repository": r.ID},
+		}))
+	}
+	_, err = os.Exec(ctx, os.Cmd{
+		Name: "git",
 		Args: []string{"pull"},
 		Dir:  s.reposDir + "/" + r.Alias,
 		Log:  true,
