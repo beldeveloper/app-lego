@@ -133,7 +133,14 @@ func (h Handler) RebuildDeployment(w http.ResponseWriter, r *http.Request, ps ht
 		apiError(w, fmt.Errorf("%w: invalid deployment id: %v", errtype.ErrBadInput, err))
 		return
 	}
-	res, err := h.deploySvc.Rebuild(r.Context(), uint64(id))
+	var f app.FormReDeployment
+	err = json.NewDecoder(r.Body).Decode(&f)
+	if err != nil {
+		apiError(w, err)
+		return
+	}
+	f.ID = uint64(id)
+	res, err := h.deploySvc.Rebuild(r.Context(), f)
 	if err != nil {
 		apiError(w, err)
 		return

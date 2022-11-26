@@ -68,20 +68,34 @@ func (s Deployment) Add(ctx context.Context, f app.FormAddDeployment) (app.Deplo
 }
 
 // Rebuild deployment by ID.
-func (s Deployment) Rebuild(ctx context.Context, id uint64) (app.Deployment, error) {
-	d, err := s.deployRepo.FindByID(ctx, id)
+func (s Deployment) Rebuild(ctx context.Context, f app.FormReDeployment) (app.Deployment, error) {
+	d, err := s.deployRepo.FindByID(ctx, f.ID)
 	if err != nil {
 		return d, errors.WrapContext(err, errors.Context{
 			Path:   "svc.Deployment.Rebuild.FindByID",
-			Params: errors.Params{"deployment": id},
+			Params: errors.Params{"deployment": f.ID},
 		})
+	}
+	branches, err := s.branchRepo.FindByIDs(ctx, f.Branches)
+	if err != nil {
+		return app.Deployment{}, errors.WrapContext(err, errors.Context{
+			Path:   "svc.Deployment.Add.FindByIDs",
+			Params: errors.Params{"branches": f.Branches},
+		})
+	}
+	d.Branches = make([]app.DeploymentBranch, len(branches))
+	for i, b := range branches {
+		d.Branches[i] = app.DeploymentBranch{
+			ID:   b.ID,
+			Hash: b.Hash,
+		}
 	}
 	d.Status = app.DeploymentStatusEnqueued
 	d, err = s.deployRepo.Update(ctx, d)
 	if err != nil {
 		return d, errors.WrapContext(err, errors.Context{
 			Path:   "svc.Deployment.Rebuild.Update",
-			Params: errors.Params{"deployment": id},
+			Params: errors.Params{"deployment": d.ID},
 		})
 	}
 	log.Printf("The deployment #%d is enqueued for rebuilding\n", d.ID)

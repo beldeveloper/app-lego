@@ -39,11 +39,17 @@ type FormAddDeployment struct {
 	Branches    []uint64 `json:"branches"`
 }
 
+// FormReDeployment represents a form for restarting the deployment.
+type FormReDeployment struct {
+	ID       uint64   `json:"id"`
+	Branches []uint64 `json:"branches"`
+}
+
 // DeploymentSvc describes the deployment service.
 type DeploymentSvc interface {
 	List(context.Context) ([]Deployment, error)
 	Add(context.Context, FormAddDeployment) (Deployment, error)
-	Rebuild(context.Context, uint64) (Deployment, error)
+	Rebuild(context.Context, FormReDeployment) (Deployment, error)
 	RebuildWithBranch(ctx context.Context, b Branch) error
 	Close(context.Context, uint64) error
 	WatchJob(ctx context.Context) error

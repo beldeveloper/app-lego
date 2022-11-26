@@ -118,11 +118,11 @@ func (r Branch) FindByID(ctx context.Context, id uint64) (app.Branch, error) {
 	})
 }
 
-// FindEnqueued returns the one branch that is enqueued.
+// FindEnqueued returns the one branch that is enqueued or in building status (it means the process was interrupted earlier).
 func (r Branch) FindEnqueued(ctx context.Context) (app.Branch, error) {
 	var b app.Branch
-	q := `SELECT "id", "repository_id", "type", "name", "hash", "status" FROM "branches" WHERE "status" = $1 LIMIT 1`
-	err := r.conn.QueryRow(ctx, q, app.BranchStatusEnqueued).
+	q := `SELECT "id", "repository_id", "type", "name", "hash", "status" FROM "branches" WHERE "status" IN ($1, $2) LIMIT 1`
+	err := r.conn.QueryRow(ctx, q, app.BranchStatusEnqueued, app.BranchStatusBuilding).
 		Scan(&b.ID, &b.RepositoryID, &b.Type, &b.Name, &b.Hash, &b.Status)
 	if err == pgx.ErrNoRows {
 		err = errtype.ErrNotFound
