@@ -135,6 +135,8 @@ func (s Branch) BuildJob(ctx context.Context) error {
 			Params: errors.Params{"repository": b.RepositoryID},
 		}))
 		b.Status = app.BranchStatusFailed
+		errorMsg := fmt.Sprintf("Can't find repository id=%d; err=%v", b.RepositoryID, err)
+		b.ErrorMsg = &errorMsg
 		s.updateStatus(ctx, b)
 		return nil
 	}
@@ -145,6 +147,8 @@ func (s Branch) BuildJob(ctx context.Context) error {
 	err = s.vcsSvc.SwitchBranch(ctx, r, b)
 	if err != nil {
 		b.Status = app.BranchStatusFailed
+		errorMsg := fmt.Sprintf("Can't switch branch id=%d; err=%v", b.ID, err)
+		b.ErrorMsg = &errorMsg
 		s.updateStatus(ctx, b)
 		return errors.WrapContext(err, errors.Context{
 			Path:   "svc.Branch.BuildJob.SwitchBranch",
@@ -167,6 +171,8 @@ func (s Branch) BuildJob(ctx context.Context) error {
 	})
 	if err != nil {
 		b.Status = app.BranchStatusFailed
+		errorMsg := err.Error()
+		b.ErrorMsg = &errorMsg
 		s.updateStatus(ctx, b)
 		return errors.WrapContext(err, errors.Context{
 			Path:   "svc.Branch.BuildJob.BuildBranch",
@@ -178,6 +184,7 @@ func (s Branch) BuildJob(ctx context.Context) error {
 		b.Status = buildRes.Status
 	default:
 		b.Status = app.BranchStatusFailed
+		b.ErrorMsg = buildRes.ErrorMsg
 		log.Printf("The branch #%d was not built, see details in hook handler; status=%s\n", b.ID, buildRes.Status)
 	}
 	if !s.updateStatus(ctx, b) || b.Status != app.BranchStatusReady {

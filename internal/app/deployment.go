@@ -25,6 +25,7 @@ type Deployment struct {
 	CreatedAt   time.Time          `json:"createdAt"`
 	AutoRebuild bool               `json:"autoRebuild"`
 	Branches    []DeploymentBranch `json:"branches"`
+	ErrorMsg    *string            `json:"errorMsg"`
 }
 
 // DeploymentBranch is a model that contains a snapshot of the branch data used in the particular deployment.

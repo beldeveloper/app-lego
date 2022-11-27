@@ -38,6 +38,9 @@ func (s Hook) BuildBranch(ctx context.Context, req pkg.HookBuildBranchReq) (pkg.
 		return res, errors.WrapContext(err, errors.Context{Path: "svc.Hook.BuildBranch"})
 	}
 	res.Status = rpcRes.Status
+	if rpcRes.ErrorMsg != "" {
+		res.ErrorMsg = &rpcRes.ErrorMsg
+	}
 	return res, nil
 }
 
@@ -76,7 +79,14 @@ func (s Hook) Deploy(ctx context.Context, req pkg.HookDeployReq) (pkg.HookDeploy
 	if err != nil {
 		return res, errors.WrapContext(err, errors.Context{Path: "svc.Hook.Deploy"})
 	}
-	res.Statuses = rpcRes.Statuses
+	res.Statuses = make(map[uint64]pkg.HookDeployStatus, len(rpcRes.Statuses))
+	for k, v := range rpcRes.Statuses {
+		status := pkg.HookDeployStatus{Status: v.Status}
+		if v.ErrorMsg != "" {
+			status.ErrorMsg = &v.ErrorMsg
+		}
+		res.Statuses[k] = status
+	}
 	return res, nil
 }
 

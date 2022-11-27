@@ -234,13 +234,14 @@ func (s Deployment) WatchJob(ctx context.Context) error {
 			Alias: r.Alias,
 		})
 	}
-	err = s.massUpdateStatus(ctx, deployMap, app.DeploymentStatusBuilding)
+	err = s.massUpdateStatus(ctx, deployMap, app.DeploymentStatusBuilding, nil)
 	if err != nil {
 		return err
 	}
 	deployRes, err := s.hookSvc.Deploy(ctx, hookReq)
 	if err != nil {
-		err = s.massUpdateStatus(ctx, deployMap, app.DeploymentStatusFailed)
+		errMsg := err.Error()
+		err = s.massUpdateStatus(ctx, deployMap, app.DeploymentStatusFailed, &errMsg)
 		if err != nil {
 			log.Println(err)
 		}
@@ -251,12 +252,13 @@ func (s Deployment) WatchJob(ctx context.Context) error {
 		if !exists {
 			continue
 		}
-		switch status {
+		switch status.Status {
 		case app.DeploymentStatusReady:
-			d.Status = status
+			d.Status = status.Status
 			s.updateHashes(d, branchMap)
 		default:
 			d.Status = app.DeploymentStatusFailed
+			d.ErrorMsg = status.ErrorMsg
 			log.Printf("The deployment #%d was not deployed, see details in hook handler; status=%s\n", d.ID, status)
 		}
 		_, err = s.deployRepo.Update(ctx, d)
@@ -270,10 +272,11 @@ func (s Deployment) WatchJob(ctx context.Context) error {
 	return nil
 }
 
-func (s Deployment) massUpdateStatus(ctx context.Context, deploys map[uint64]app.Deployment, status string) error {
+func (s Deployment) massUpdateStatus(ctx context.Context, deploys map[uint64]app.Deployment, status string, errorMsg *string) error {
 	var err error
 	for _, d := range deploys {
 		d.Status = status
+		d.ErrorMsg = errorMsg
 		_, err = s.deployRepo.Update(ctx, d)
 		if err != nil {
 			return errors.WrapContext(err, errors.Context{

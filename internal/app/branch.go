@@ -24,12 +24,13 @@ const (
 
 // Branch is a model that represents a repository branch.
 type Branch struct {
-	ID           uint64 `json:"id"`
-	RepositoryID uint64 `json:"repositoryId"`
-	Type         string `json:"type"`
-	Name         string `json:"name"`
-	Hash         string `json:"hash"`
-	Status       string `json:"status"`
+	ID           uint64  `json:"id"`
+	RepositoryID uint64  `json:"repositoryId"`
+	Type         string  `json:"type"`
+	Name         string  `json:"name"`
+	Hash         string  `json:"hash"`
+	Status       string  `json:"status"`
+	ErrorMsg     *string `json:"errorMsg"`
 }
 
 // BranchSvc describes the branch service.

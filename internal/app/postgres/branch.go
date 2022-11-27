@@ -24,7 +24,7 @@ type Branch struct {
 
 // FindAll returns all branches.
 func (r Branch) FindAll(ctx context.Context) ([]app.Branch, error) {
-	q := `SELECT "id", "repository_id", "type", "name", "hash", "status" FROM "branches" ORDER BY "name"`
+	q := `SELECT "id", "repository_id", "type", "name", "hash", "status", "error_msg" FROM "branches" ORDER BY "name"`
 	rows, err := r.conn.Query(ctx, q)
 	if err != nil {
 		return nil, errors.WrapContext(err, errors.Context{Path: "postgres.Branch.FindAll.Query"})
@@ -33,7 +33,7 @@ func (r Branch) FindAll(ctx context.Context) ([]app.Branch, error) {
 	res := make([]app.Branch, 0)
 	var b app.Branch
 	for rows.Next() {
-		err = rows.Scan(&b.ID, &b.RepositoryID, &b.Type, &b.Name, &b.Hash, &b.Status)
+		err = rows.Scan(&b.ID, &b.RepositoryID, &b.Type, &b.Name, &b.Hash, &b.Status, &b.ErrorMsg)
 		if err != nil {
 			return nil, errors.WrapContext(err, errors.Context{Path: "postgres.Branch.FindAll.Scan"})
 		}
@@ -52,7 +52,7 @@ func (r Branch) FindByIDs(ctx context.Context, ids []uint64) ([]app.Branch, erro
 		idsStr[i] = strconv.Itoa(int(id))
 	}
 	q := fmt.Sprintf(
-		`SELECT "id", "repository_id", "type", "name", "hash", "status" FROM "branches" WHERE "id" IN (%s)`,
+		`SELECT "id", "repository_id", "type", "name", "hash", "status", "error_msg" FROM "branches" WHERE "id" IN (%s)`,
 		strings.Join(idsStr, ","),
 	)
 	rows, err := r.conn.Query(ctx, q)
@@ -66,7 +66,7 @@ func (r Branch) FindByIDs(ctx context.Context, ids []uint64) ([]app.Branch, erro
 	res := make([]app.Branch, 0)
 	var b app.Branch
 	for rows.Next() {
-		err = rows.Scan(&b.ID, &b.RepositoryID, &b.Type, &b.Name, &b.Hash, &b.Status)
+		err = rows.Scan(&b.ID, &b.RepositoryID, &b.Type, &b.Name, &b.Hash, &b.Status, &b.ErrorMsg)
 		if err != nil {
 			return nil, errors.WrapContext(err, errors.Context{
 				Path:   "postgres.Branch.FindByIDs.Scan",
@@ -80,7 +80,7 @@ func (r Branch) FindByIDs(ctx context.Context, ids []uint64) ([]app.Branch, erro
 
 // FindByRepository returns all branches that belong to the specific repository.
 func (r Branch) FindByRepository(ctx context.Context, repo app.Repository) ([]app.Branch, error) {
-	q := `SELECT "id", "repository_id", "type", "name", "hash", "status" FROM "branches" WHERE "repository_id" = $1`
+	q := `SELECT "id", "repository_id", "type", "name", "hash", "status", "error_msg" FROM "branches" WHERE "repository_id" = $1`
 	rows, err := r.conn.Query(ctx, q, repo.ID)
 	if err != nil {
 		return nil, errors.WrapContext(err, errors.Context{
@@ -92,7 +92,7 @@ func (r Branch) FindByRepository(ctx context.Context, repo app.Repository) ([]ap
 	res := make([]app.Branch, 0)
 	var b app.Branch
 	for rows.Next() {
-		err = rows.Scan(&b.ID, &b.RepositoryID, &b.Type, &b.Name, &b.Hash, &b.Status)
+		err = rows.Scan(&b.ID, &b.RepositoryID, &b.Type, &b.Name, &b.Hash, &b.Status, &b.ErrorMsg)
 		if err != nil {
 			return nil, errors.WrapContext(err, errors.Context{
 				Path:   "postgres.Branch.FindByRepository.Scan",
@@ -107,8 +107,8 @@ func (r Branch) FindByRepository(ctx context.Context, repo app.Repository) ([]ap
 // FindByID returns the one branch with the specific ID.
 func (r Branch) FindByID(ctx context.Context, id uint64) (app.Branch, error) {
 	var b app.Branch
-	q := `SELECT "id", "repository_id", "type", "name", "hash", "status" FROM "branches" WHERE "id" = $1`
-	err := r.conn.QueryRow(ctx, q, id).Scan(&b.ID, &b.RepositoryID, &b.Type, &b.Name, &b.Hash, &b.Status)
+	q := `SELECT "id", "repository_id", "type", "name", "hash", "status", "error_msg" FROM "branches" WHERE "id" = $1`
+	err := r.conn.QueryRow(ctx, q, id).Scan(&b.ID, &b.RepositoryID, &b.Type, &b.Name, &b.Hash, &b.Status, &b.ErrorMsg)
 	if err == pgx.ErrNoRows {
 		err = errtype.ErrNotFound
 	}
@@ -121,9 +121,9 @@ func (r Branch) FindByID(ctx context.Context, id uint64) (app.Branch, error) {
 // FindEnqueued returns the one branch that is enqueued or in building status (it means the process was interrupted earlier).
 func (r Branch) FindEnqueued(ctx context.Context) (app.Branch, error) {
 	var b app.Branch
-	q := `SELECT "id", "repository_id", "type", "name", "hash", "status" FROM "branches" WHERE "status" IN ($1, $2) LIMIT 1`
+	q := `SELECT "id", "repository_id", "type", "name", "hash", "status", "error_msg" FROM "branches" WHERE "status" IN ($1, $2) LIMIT 1`
 	err := r.conn.QueryRow(ctx, q, app.BranchStatusEnqueued, app.BranchStatusBuilding).
-		Scan(&b.ID, &b.RepositoryID, &b.Type, &b.Name, &b.Hash, &b.Status)
+		Scan(&b.ID, &b.RepositoryID, &b.Type, &b.Name, &b.Hash, &b.Status, &b.ErrorMsg)
 	if err == pgx.ErrNoRows {
 		err = errtype.ErrNotFound
 	}
@@ -143,8 +143,8 @@ func (r Branch) Add(ctx context.Context, b app.Branch) (app.Branch, error) {
 
 // Update modifies a specific branch.
 func (r Branch) Update(ctx context.Context, b app.Branch) (app.Branch, error) {
-	q := `UPDATE "branches" SET "hash" = $2, "status" = $3 WHERE "id" = $1`
-	_, err := r.conn.Exec(ctx, q, b.ID, b.Hash, b.Status)
+	q := `UPDATE "branches" SET "hash" = $2, "status" = $3, "error_msg" = $4 WHERE "id" = $1`
+	_, err := r.conn.Exec(ctx, q, b.ID, b.Hash, b.Status, b.ErrorMsg)
 	return b, errors.WrapContext(err, errors.Context{
 		Path:   "postgres.Branch.Update.Exec",
 		Params: errors.Params{"branch": b.ID, "status": b.Status, "hash": b.Hash},
@@ -173,8 +173,8 @@ func (r Branch) DeleteByIDs(ctx context.Context, ids []uint64) error {
 
 // UpdateStatus modifies the branch status.
 func (r Branch) UpdateStatus(ctx context.Context, b app.Branch) error {
-	q := `UPDATE "branches" SET "status" = $2 WHERE "id" = $1`
-	_, err := r.conn.Exec(ctx, q, b.ID, b.Status)
+	q := `UPDATE "branches" SET "status" = $2, "error_msg" = $3 WHERE "id" = $1`
+	_, err := r.conn.Exec(ctx, q, b.ID, b.Status, b.ErrorMsg)
 	return errors.WrapContext(err, errors.Context{
 		Path:   "postgres.Branch.UpdateStatus.Exec",
 		Params: errors.Params{"branch": b.ID, "status": b.Status},

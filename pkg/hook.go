@@ -33,7 +33,8 @@ type HookBuildBranchReq struct {
 
 // HookBuildBranchResp contains response data from the hook handler.
 type HookBuildBranchResp struct {
-	Status string
+	Status   string
+	ErrorMsg *string
 }
 
 // HookDeployReq contains request data for calling deploy in the hook handler.
@@ -44,7 +45,13 @@ type HookDeployReq struct {
 
 // HookDeployResp contains response data from the hook handler.
 type HookDeployResp struct {
-	Statuses map[uint64]string
+	Statuses map[uint64]HookDeployStatus
+}
+
+// HookDeployStatus defines the structure of the deployment status.
+type HookDeployStatus struct {
+	Status   string
+	ErrorMsg *string
 }
 
 // HookSvc describes the interactions with the hook handler.

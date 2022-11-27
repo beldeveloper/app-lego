@@ -32,6 +32,7 @@ message BuildBranchReq {
 
 message BuildBranchResp {
   string status = 1;
+  string errorMsg = 2;
 }
 
 message DeployReq {
@@ -40,7 +41,12 @@ message DeployReq {
 }
 
 message DeployResp {
-  map<uint64, string> statuses = 1;
+  map<uint64, DeployStatus> statuses = 1;
+}
+
+message DeployStatus {
+  string status = 1;
+  string errorMsg = 2;
 }
 
 message CleanBranchesReq {

@@ -21,7 +21,7 @@ type Deployment struct {
 
 // FindAll returns non-closed deployments.
 func (r Deployment) FindAll(ctx context.Context) ([]app.Deployment, error) {
-	q := `SELECT "id", "status", "created_at", "auto_rebuild", "branches" FROM "deployments"
+	q := `SELECT "id", "status", "created_at", "auto_rebuild", "branches", "error_msg" FROM "deployments"
 		WHERE "status" != $1 ORDER BY "created_at" DESC`
 	rows, err := r.conn.Query(ctx, q, app.DeploymentStatusClosed)
 	if err != nil {
@@ -32,7 +32,7 @@ func (r Deployment) FindAll(ctx context.Context) ([]app.Deployment, error) {
 	var d app.Deployment
 	for rows.Next() {
 		d.Branches = nil
-		err = rows.Scan(&d.ID, &d.Status, &d.CreatedAt, &d.AutoRebuild, &d.Branches)
+		err = rows.Scan(&d.ID, &d.Status, &d.CreatedAt, &d.AutoRebuild, &d.Branches, &d.ErrorMsg)
 		if err != nil {
 			return nil, errors.WrapContext(err, errors.Context{Path: "postgres.Deployment.FindAll.Scan"})
 		}
@@ -43,7 +43,7 @@ func (r Deployment) FindAll(ctx context.Context) ([]app.Deployment, error) {
 
 // FindForAutoRebuild returns all ready deployments that are marked as auto_rebuild and are bound to the specific branch.
 func (r Deployment) FindForAutoRebuild(ctx context.Context, b app.Branch) ([]app.Deployment, error) {
-	q := `SELECT "d"."id", "d"."status", "d"."created_at", "d"."auto_rebuild", "d"."branches"
+	q := `SELECT "d"."id", "d"."status", "d"."created_at", "d"."auto_rebuild", "d"."branches", "d"."error_msg"
 		FROM "deployments" "d"
 		CROSS JOIN LATERAL JSONB_ARRAY_ELEMENTS("d"."branches") AS "b"
 		WHERE ("b"->>'id')::int = $1 AND "d"."auto_rebuild" = TRUE AND "d"."status" = $2
@@ -60,7 +60,7 @@ func (r Deployment) FindForAutoRebuild(ctx context.Context, b app.Branch) ([]app
 	var d app.Deployment
 	for rows.Next() {
 		d.Branches = nil
-		err = rows.Scan(&d.ID, &d.Status, &d.CreatedAt, &d.AutoRebuild, &d.Branches)
+		err = rows.Scan(&d.ID, &d.Status, &d.CreatedAt, &d.AutoRebuild, &d.Branches, &d.ErrorMsg)
 		if err != nil {
 			return nil, errors.WrapContext(err, errors.Context{
 				Path:   "postgres.Deployment.FindForAutoRebuild.Scan",
@@ -75,8 +75,8 @@ func (r Deployment) FindForAutoRebuild(ctx context.Context, b app.Branch) ([]app
 // FindByID returns the one deployment with the specific ID.
 func (r Deployment) FindByID(ctx context.Context, id uint64) (app.Deployment, error) {
 	var d app.Deployment
-	q := `SELECT "id", "status", "created_at", "auto_rebuild", "branches" FROM "deployments" WHERE "id" = $1`
-	err := r.conn.QueryRow(ctx, q, id).Scan(&d.ID, &d.Status, &d.CreatedAt, &d.AutoRebuild, &d.Branches)
+	q := `SELECT "id", "status", "created_at", "auto_rebuild", "branches", "error_msg" FROM "deployments" WHERE "id" = $1`
+	err := r.conn.QueryRow(ctx, q, id).Scan(&d.ID, &d.Status, &d.CreatedAt, &d.AutoRebuild, &d.Branches, &d.ErrorMsg)
 	if err == pgx.ErrNoRows {
 		err = errtype.ErrNotFound
 	}
@@ -96,8 +96,8 @@ func (r Deployment) Add(ctx context.Context, d app.Deployment) (app.Deployment, 
 
 // Update modifies a specific deployment.
 func (r Deployment) Update(ctx context.Context, d app.Deployment) (app.Deployment, error) {
-	q := `UPDATE "deployments" SET "status" = $2, "branches" = $3 WHERE "id" = $1`
-	_, err := r.conn.Exec(ctx, q, d.ID, d.Status, d.Branches)
+	q := `UPDATE "deployments" SET "status" = $2, "branches" = $3, "error_msg" = $4 WHERE "id" = $1`
+	_, err := r.conn.Exec(ctx, q, d.ID, d.Status, d.Branches, d.ErrorMsg)
 	return d, errors.WrapContext(err, errors.Context{
 		Path:   "postgres.Deployment.Update.Exec",
 		Params: errors.Params{"deployment": d.ID},

@@ -15,6 +15,7 @@ CREATE TABLE "public"."branches" (
      "name" CHARACTER VARYING(200) NOT NULL,
      "hash" CHARACTER VARYING(200) NOT NULL,
      "status" CHARACTER VARYING(20) NOT NULL,
+     "error_msg" TEXT NULL,
      PRIMARY KEY ("id")
 );
 
@@ -24,5 +25,6 @@ CREATE TABLE "public"."deployments" (
      "created_at" TIMESTAMP NOT NULL,
      "auto_rebuild" BOOLEAN NOT NULL,
      "branches" JSONB,
+     "error_msg" TEXT NULL,
      PRIMARY KEY ("id")
 );
