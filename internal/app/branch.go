@@ -36,6 +36,7 @@ type Branch struct {
 // BranchSvc describes the branch service.
 type BranchSvc interface {
 	List(context.Context) ([]Branch, error)
+	Rebuild(context.Context, uint64) error
 	Sync(ctx context.Context, r Repository) error
 	BuildJob(ctx context.Context) error
 }

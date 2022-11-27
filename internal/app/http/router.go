@@ -12,6 +12,7 @@ func NewRouter(h Handler) *httprouter.Router {
 	r.GET("/repositories", h.Repositories)
 	r.POST("/repositories", h.AddRepository)
 	r.GET("/branches", h.Branches)
+	r.POST("/branch/:id", h.RebuildBranch)
 	r.GET("/deployments", h.Deployments)
 	r.POST("/deployments", h.AddDeployment)
 	r.POST("/deployment/:id", h.RebuildDeployment)

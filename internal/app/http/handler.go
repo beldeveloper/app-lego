@@ -85,6 +85,26 @@ func (h Handler) Branches(w http.ResponseWriter, r *http.Request, ps httprouter.
 	apiSuccess(w, res)
 }
 
+// RebuildBranch enqueues the existing branch for rebuilding.
+func (h Handler) RebuildBranch(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	err := h.validateKey(r)
+	if err != nil {
+		apiError(w, err)
+		return
+	}
+	id, err := strconv.Atoi(ps.ByName("id"))
+	if err != nil {
+		apiError(w, fmt.Errorf("%w: invalid branch id: %v", errtype.ErrBadInput, err))
+		return
+	}
+	err = h.branchSvc.Rebuild(r.Context(), uint64(id))
+	if err != nil {
+		apiError(w, err)
+		return
+	}
+	apiSuccess(w, nil)
+}
+
 // Deployments returns non-closed deployments.
 func (h Handler) Deployments(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	err := h.validateKey(r)

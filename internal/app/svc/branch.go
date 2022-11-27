@@ -42,6 +42,26 @@ func (s Branch) List(ctx context.Context) ([]app.Branch, error) {
 	return res, errors.WrapContext(err, errors.Context{Path: "svc.Branch.List.FindAll"})
 }
 
+// Rebuild the particular branch.
+func (s Branch) Rebuild(ctx context.Context, id uint64) error {
+	b, err := s.branchRepo.FindByID(ctx, id)
+	if err != nil {
+		return errors.WrapContext(err, errors.Context{Path: "svc.Branch.Rebuild.FindByID"})
+	}
+	if b.Status != app.BranchStatusFailed && b.Status != app.BranchStatusSkipped {
+		return errors.WrapContext(errtype.ErrBadInput, errors.Context{Path: "svc.Branch.Rebuild.checkStatus"})
+	}
+	b.Status = app.BranchStatusEnqueued
+	_, err = s.branchRepo.Update(ctx, b)
+	if err != nil {
+		return errors.WrapContext(err, errors.Context{
+			Path:   "svc.Branch.Rebuild.Update",
+			Params: errors.Params{"branch": b.ID},
+		})
+	}
+	return nil
+}
+
 // Sync all repository branches with VCS.
 func (s Branch) Sync(ctx context.Context, r app.Repository) error {
 	vcsBranches, err := s.vcsSvc.Branches(ctx, r)
