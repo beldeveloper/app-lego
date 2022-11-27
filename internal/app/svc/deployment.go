@@ -194,11 +194,7 @@ func (s Deployment) WatchJob(ctx context.Context) error {
 	deployMap := make(map[uint64]app.Deployment, len(deployments))
 	var upd bool
 	for _, d := range deployments {
-		if d.Status == app.DeploymentStatusBuilding {
-			// skip if another deployment is in progress
-			return nil
-		}
-		if d.Status == app.DeploymentStatusEnqueued {
+		if d.Status == app.DeploymentStatusEnqueued || d.Status == app.DeploymentStatusBuilding {
 			upd = true
 			deployMap[d.ID] = d
 			hookReq.Deployments = append(hookReq.Deployments, makeHook(d, true))
